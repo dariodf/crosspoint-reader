@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <FindRadio.h>
 #include <FindState.h>
+#include <HalSystem.h>
 #include <Logging.h>
 #include <WiFi.h>
 #include <bootloader_random.h>
@@ -21,8 +22,10 @@ namespace {
 // fastest advertising interval (~100 ms) this hears it about five times; the
 // listen ends as soon as it does, so the full time is spent only on quiet wakes.
 static constexpr uint32_t LISTEN_MS = 500;
-// How long found mode broadcasts CP-FIND before giving up and sleeping again.
-static constexpr uint32_t BROADCAST_MS = 5UL * 60UL * 1000UL;
+// How long found mode broadcasts CP-FIND before sleeping again. Short, to save
+// battery: while the phone keeps advertising, the next wake hears it again
+// and starts another broadcast.
+static constexpr uint32_t BROADCAST_MS = 60UL * 1000UL;
 
 // Time budgets for the fast-path guard below. Listening covers NimBLE start-up
 // (normally ~0.3 s), the listen itself and the teardown.
@@ -39,24 +42,21 @@ bool settingsLoaded = false;
 // FindRadio polls a plain function pointer, so the GPIO it reads lives here.
 HalGPIO* gpioForButtonCheck = nullptr;
 
+// Timer wakes set up only the power button (HalGPIO::beginPowerButtonOnly), so
+// this reads it raw: down on two checks in a row (FindRadio checks every
+// 10 ms) filters contact bounce, like the input manager's debounce.
+bool powerButtonDownBefore = false;
+
 bool powerButtonPressed() {
-  gpioForButtonCheck->update();
-  return gpioForButtonCheck->isPressed(HalGPIO::BTN_POWER);
+  const bool down = gpioForButtonCheck->isPowerButtonDown();
+  const bool pressed = down && powerButtonDownBefore;
+  powerButtonDownBefore = down;
+  return pressed;
 }
 
-bool resetWasCrash() {
-  switch (esp_reset_reason()) {
-    case ESP_RST_PANIC:
-    case ESP_RST_CPU_LOCKUP:
-    case ESP_RST_INT_WDT:
-    case ESP_RST_TASK_WDT:
-    case ESP_RST_WDT:
-    case ESP_RST_BROWNOUT:  // a radio burst on a weak battery
-      return true;
-    default:
-      return false;
-  }
-}
+// The firmware's own panic check, plus brownout: a radio burst on a weak
+// battery can pull the supply down mid-broadcast.
+bool resetWasCrash() { return HalSystem::isRebootFromPanic() || esp_reset_reason() == ESP_RST_BROWNOUT; }
 
 // The fast-path guard. The Arduino loop task has no watchdog, and a NimBLE call
 // that never returns (init() waits for the controller to sync with no timeout)
@@ -92,13 +92,6 @@ struct FindSettings {
   find_mode::Code code;
 };
 
-// Settings store an index into a choices table. fromJson and the web page
-// already keep it in range; this keeps a bad index from reading past the table.
-template <size_t N>
-uint8_t choiceOrLast(const uint8_t (&choices)[N], const uint8_t index) {
-  return choices[index < N ? index : N - 1];
-}
-
 FindSettings readSettings() {
   FindSettings settings{};
 #ifdef CROSSPOINT_FIND_MODE_TEST_CODE
@@ -109,8 +102,9 @@ FindSettings readSettings() {
   // With no valid code there is nothing a phone could send, so the mode stays
   // off until the Find mode code screen has created one.
   settings.enabled = SETTINGS.findModeEnabled && find_mode::parseCode(SETTINGS.findModeCode, settings.code);
-  settings.intervalMinutes = choiceOrLast(CrossPointSettings::FIND_INTERVAL_MINUTES, SETTINGS.findModeInterval);
-  settings.minBatteryPercent = choiceOrLast(CrossPointSettings::FIND_MIN_BATTERY_PERCENT, SETTINGS.findModeMinBattery);
+  // Both are clamped to their setting's range when settings.json loads.
+  settings.intervalMinutes = SETTINGS.findModeIntervalMinutes;
+  settings.minBatteryPercent = SETTINGS.findModeMinBatteryPercent;
 #endif
   return settings;
 }
@@ -123,21 +117,36 @@ bool settingsAvailable() {
 #endif
 }
 
-// Every later sleep on this boot wakes on the timer too, as long as the state
-// is usable and the mode has not switched itself off.
+// Every later sleep on this boot wakes on the timer too, while the mode is armed.
 void armWakeTimer(HalPowerManager& powerManager) {
-  const bool armed = find_mode::isStateValid(sleepState) && !sleepState.switchedOffByCrashes;
-  powerManager.setWakeTimerSeconds(armed ? sleepState.intervalMinutes * 60U : 0);
+  powerManager.setWakeTimerSeconds(find_mode::isArmed(sleepState) ? sleepState.intervalMinutes * 60U : 0);
 }
 
 }  // namespace
 
-void findModeOnBoot(HalPowerManager& powerManager) {
+void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager) {
+  // A brownout while the radio ran means the battery cannot carry it. A full
+  // boot (SD card, screen refresh) would draw more on the same weak cell and
+  // brown out again, so sleep until the owner presses power.
+  const bool brownedOutInFastPath =
+      esp_reset_reason() == ESP_RST_BROWNOUT && find_mode::isStateValid(sleepState) && sleepState.inFastPath;
   find_mode::countFastPathCrash(sleepState, resetWasCrash());
   armWakeTimer(powerManager);
+  if (brownedOutInFastPath) {
+    LOG_ERR("FIND", "Brownout while the radio ran, sleeping until the power button");
+    powerManager.setWakeTimerSeconds(0);
+    powerManager.startDeepSleep(gpio);
+  }
 }
 
 void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager) {
+  // The timer and the power button can fire together; the chip then reports
+  // the timer. The owner pressed power, so hand over at once.
+  if (esp_sleep_get_wakeup_causes() & (1U << ESP_SLEEP_WAKEUP_EXT1)) {
+    LOG_INF("FIND", "Power button woke the reader with the timer, booting");
+    return;
+  }
+
   uint16_t battery = 0;
   if (!powerManager.readBatteryPercentage(battery)) {
     LOG_INF("FIND", "Battery gauge did not answer, listening anyway");
@@ -195,7 +204,9 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager) {
   disarmFastPathGuard();
   // millis() counts from boot, so this includes the start-up before listening.
   find_mode::leaveFastPath(sleepState, millis(), heardCode);
-  if (ownerPressedPower) return;
+  // A press during start-up or teardown missed the radio's checks. The sleep
+  // path would wait for its release and sleep anyway, so look once more.
+  if (ownerPressedPower || gpio.isPowerButtonDown()) return;
 
   // The wake timer armed by findModeOnBoot() is still set for this sleep.
   powerManager.startDeepSleep(gpio);

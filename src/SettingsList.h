@@ -382,12 +382,15 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
 #if CROSSPOINT_FIND_MODE
         SettingInfo::Toggle(StrId::STR_FIND_MODE, &CrossPointSettings::findModeEnabled, "findModeEnabled",
                             StrId::STR_CAT_SYSTEM),
-        SettingInfo::Enum(StrId::STR_FIND_LISTEN_EVERY, &CrossPointSettings::findModeInterval,
-                          {StrId::STR_FIND_1_MIN, StrId::STR_FIND_2_MIN, StrId::STR_FIND_5_MIN}, "findModeInterval",
-                          StrId::STR_CAT_SYSTEM),
-        SettingInfo::Enum(StrId::STR_FIND_STOP_BELOW, &CrossPointSettings::findModeMinBattery,
-                          {StrId::STR_FIND_10_PERCENT, StrId::STR_FIND_15_PERCENT, StrId::STR_FIND_20_PERCENT},
-                          "findModeMinBattery", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Value(
+            StrId::STR_FIND_LISTEN_EVERY, &CrossPointSettings::findModeIntervalMinutes,
+            {CrossPointSettings::FIND_INTERVAL_MIN_MINUTES, CrossPointSettings::FIND_INTERVAL_MAX_MINUTES, 1},
+            "findModeIntervalMinutes", StrId::STR_CAT_SYSTEM),
+        SettingInfo::Value(
+            StrId::STR_FIND_STOP_BELOW, &CrossPointSettings::findModeMinBatteryPercent,
+            {CrossPointSettings::FIND_MIN_BATTERY_LOWEST_PERCENT, CrossPointSettings::FIND_MIN_BATTERY_HIGHEST_PERCENT,
+             CrossPointSettings::FIND_MIN_BATTERY_STEP_PERCENT},
+            "findModeMinBatteryPercent", StrId::STR_CAT_SYSTEM),
         // The code: persisted and web-exposed, category-less so the Find mode
         // code screen owns it on the device.
         SettingInfo::String(StrId::STR_FIND_CODE, &SETTINGS.findModeCode[0], sizeof(SETTINGS.findModeCode),

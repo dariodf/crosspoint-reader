@@ -69,6 +69,15 @@ class HalGPIO {
   // Start button GPIO and setup SPI for screen and SD card
   void begin();
 
+  // Find mode's timer wakes: set up only the power button and skip the touch
+  // controller's power-up and reset (~170 ms of a ~1 s wake). begin() completes
+  // the input setup if the boot continues.
+  void beginPowerButtonOnly();
+  // Raw power-button level, readable after beginPowerButtonOnly().
+  bool isPowerButtonDown() const;
+  // Deep-sleep wake caused by the RTC timer (find mode). Needs no begin().
+  static bool isTimerWake();
+
   // Button input methods
   void update();
   bool isPressed(uint8_t buttonIndex) const;

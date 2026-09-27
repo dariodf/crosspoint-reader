@@ -18,6 +18,9 @@
 #include <SPI.h>
 #include <VectorFontSupport.h>
 #include <WiFi.h>
+#if CROSSPOINT_FIND_MODE
+#include <esp_bt.h>
+#endif
 #include <XteinkDetect.h>
 #include <builtinFonts/all.h>
 
@@ -380,14 +383,32 @@ void setup() {
   silentRebootTarget = 0;
   silentRebootPayload = 0;
 
+#if CROSSPOINT_FIND_MODE
+  // Find mode's timer wakes read only the power button; the touch controller's
+  // power-up waits until the boot continues (gpio.begin() below).
+  const bool findModeTimerWake = HalGPIO::isTimerWake();
+  if (findModeTimerWake) {
+    gpio.beginPowerButtonOnly();
+  } else {
+    gpio.begin();
+  }
+#else
   gpio.begin();
+#endif
   powerManager.begin();
 
   const auto wakeupReason = gpio.getWakeupReason();
 
 #if CROSSPOINT_FIND_MODE
-  findModeOnBoot(powerManager);
-  if (wakeupReason == HalGPIO::WakeupReason::Timer) findModeRunTimerWake(gpio, powerManager);
+  findModeOnBoot(gpio, powerManager);
+  if (findModeTimerWake) {
+    findModeRunTimerWake(gpio, powerManager);
+    // Returned: the owner pressed power. Finish the input setup skipped above.
+    gpio.begin();
+  }
+  // Bluetooth runs only in the fast path above, so hand its controller's
+  // static memory to the heap for the rest of this boot.
+  esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
 #endif
   // Sample the wake hold now — a click wake is released within milliseconds of
   // boot — but defer the sleep-or-boot decision until SETTINGS is loaded below:

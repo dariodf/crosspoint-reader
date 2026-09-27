@@ -139,6 +139,21 @@ void HalGPIO::begin() {
   inputMgr.begin();
 }
 
+void HalGPIO::beginPowerButtonOnly() {
+  const int8_t pin = BoardConfig::ACTIVE.input.power;
+  if (pin >= 0) pinMode(pin, BoardConfig::ACTIVE.input.powerActiveHigh ? INPUT_PULLDOWN : INPUT_PULLUP);
+}
+
+bool HalGPIO::isPowerButtonDown() const {
+  const int8_t pin = BoardConfig::ACTIVE.input.power;
+  if (pin < 0) return false;
+  return digitalRead(pin) == (BoardConfig::ACTIVE.input.powerActiveHigh ? HIGH : LOW);
+}
+
+bool HalGPIO::isTimerWake() {
+  return esp_reset_reason() == ESP_RST_DEEPSLEEP && esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_TIMER;
+}
+
 void HalGPIO::update() {
   inputMgr.update();
   const bool connected = isUsbConnected();

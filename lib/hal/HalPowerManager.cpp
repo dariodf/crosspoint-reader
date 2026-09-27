@@ -145,10 +145,7 @@ const BatteryMonitor& batteryMonitor() {
 }  // namespace
 
 bool HalPowerManager::readBatteryPercentage(uint16_t& percent) const {
-  const BatteryMonitor& battery = batteryMonitor();
-  if (BoardConfig::ACTIVE.batteryGauge.gaugeAddr != 0) return battery.readPercentageChecked(percent);
-  percent = battery.readPercentage();
-  return true;
+  return batteryMonitor().readPercentageChecked(percent);
 }
 
 uint16_t HalPowerManager::getBatteryPercentage() const {

@@ -26,8 +26,10 @@ bool isStateValid(const FindState& state) {
   return state.magic == STATE_MAGIC && state.version == STATE_VERSION && state.crc == stateCrc(state);
 }
 
+bool isArmed(const FindState& state) { return isStateValid(state) && !state.switchedOffByCrashes; }
+
 TimerWakeAction decideTimerWake(const FindState& state, const uint16_t batteryPercent) {
-  if (!isStateValid(state) || state.switchedOffByCrashes) return TimerWakeAction::NormalBoot;
+  if (!isArmed(state)) return TimerWakeAction::NormalBoot;
   if (batteryPercent != BATTERY_UNKNOWN && batteryPercent < state.minBatteryPercent) {
     return TimerWakeAction::SleepUntilButton;
   }

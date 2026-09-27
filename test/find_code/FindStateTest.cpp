@@ -72,6 +72,22 @@ TEST(FindStateChecksum, AnOlderVersionIsInvalid) {
   EXPECT_FALSE(valid);
 }
 
+TEST(FindStateChecksum, AValidStateIsArmed) {
+  const FindState state = aValidState();
+
+  const bool armed = find_mode::isArmed(state);
+
+  EXPECT_TRUE(armed);
+}
+
+TEST(FindStateCrashes, ASwitchedOffStateIsNotArmed) {
+  const FindState state = afterCrashesInTheFastPath(3);
+
+  const bool armed = find_mode::isArmed(state);
+
+  EXPECT_FALSE(armed);
+}
+
 TEST(FindStateTimerWake, AValidStateScans) {
   const FindState state = aValidState();
 

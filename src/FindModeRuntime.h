@@ -21,8 +21,9 @@
 #include <cstdint>
 
 // Counts a crash if the previous boot died inside the fast path, and re-arms
-// the wake timer for any sleep this boot takes.
-void findModeOnBoot(HalPowerManager& powerManager);
+// the wake timer for any sleep this boot takes. After a brownout inside the
+// fast path it sleeps until the power button instead of returning.
+void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager);
 
 // Timer wake: listens for the code and, when heard, broadcasts CP-FIND. Sleeps
 // again without returning, unless the owner pressed the power button (or the

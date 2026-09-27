@@ -59,7 +59,7 @@ void FindModeCodeActivity::showQr() {
                                                            StrId::STR_FIND_CODE)) {
     startActivityForResult(std::move(activity), nullptr);
   } else {
-    LOG_ERR("FINDSET", "OOM: QrDisplayActivity");
+    LOG_ERR("FIND", "OOM: QrDisplayActivity");
   }
 }
 
@@ -68,7 +68,7 @@ void FindModeCodeActivity::askForNewCode() {
   auto confirm = makeUniqueNoThrow<ConfirmationActivity>(renderer, mappedInput, tr(STR_FIND_NEW_CODE),
                                                          tr(STR_FIND_NEW_CODE_WARNING));
   if (!confirm) {
-    LOG_ERR("FINDSET", "OOM: ConfirmationActivity");
+    LOG_ERR("FIND", "OOM: ConfirmationActivity");
     return;
   }
   startActivityForResult(std::move(confirm), [this](const ActivityResult& result) {

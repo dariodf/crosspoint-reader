@@ -63,6 +63,10 @@ void updateChecksum(FindState& state);
 // False for zeroed or corrupted RTC memory, or an older layout.
 bool isStateValid(const FindState& state);
 
+// Timer wakes should run: the state is usable and the mode has not switched
+// itself off after crashes.
+bool isArmed(const FindState& state);
+
 enum class TimerWakeAction {
   NormalBoot,        // state unusable or the mode switched itself off
   SleepUntilButton,  // battery below the minimum: stop waking on the timer

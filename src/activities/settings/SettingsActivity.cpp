@@ -543,6 +543,18 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
                static_cast<unsigned int>(SETTINGS.*(setting.valuePtr)));
       return valueBuffer;
     }
+    if (setting.valuePtr == &CrossPointSettings::findModeIntervalMinutes) {
+      char valueBuffer[32];
+      snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_SLEEP_TIMER_VALUE_FORMAT),
+               static_cast<unsigned int>(SETTINGS.findModeIntervalMinutes));
+      return valueBuffer;
+    }
+    if (setting.valuePtr == &CrossPointSettings::findModeMinBatteryPercent) {
+      char valueBuffer[32];
+      snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_FIND_PERCENT_FORMAT),
+               static_cast<unsigned int>(SETTINGS.findModeMinBatteryPercent));
+      return valueBuffer;
+    }
     return std::to_string(SETTINGS.*(setting.valuePtr));
   }
   return "";

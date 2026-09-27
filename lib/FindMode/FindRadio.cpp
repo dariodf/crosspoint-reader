@@ -86,6 +86,26 @@ bool drainHostQueue() {
   return xSemaphoreTake(drained, pdMS_TO_TICKS(DRAIN_TIMEOUT_MS)) == pdTRUE;
 }
 
+bool scanRunning() { return NimBLEDevice::getScan()->isScanning(); }
+bool advertisingRunning() { return NimBLEDevice::getAdvertising()->isAdvertising(); }
+
+// The wait shared by listening and broadcasting. Checks every CHECK_EVERY_MS
+// until `ms` pass and returns the first of: HeardCode once `heard` turns true
+// (when given), ButtonPressed, RadioFailed when `radioRunning` reports the
+// radio stopped by itself (a NimBLE host reset ends scans and advertising
+// silently), or `timeUp` when the time runs out.
+RadioResult pollFor(const uint32_t ms, const PowerButtonCheck powerButtonPressed, const volatile bool* heard,
+                    bool (*radioRunning)(), const RadioResult timeUp) {
+  const uint32_t startedAt = millis();
+  while (millis() - startedAt < ms) {
+    if (heard != nullptr && *heard) return RadioResult::HeardCode;
+    if (powerButtonPressed()) return RadioResult::ButtonPressed;
+    if (!radioRunning()) return RadioResult::RadioFailed;
+    delay(CHECK_EVERY_MS);
+  }
+  return timeUp;
+}
+
 }  // namespace
 
 RadioResult listenForCode(const Code& code, const uint32_t listenMs, const PowerButtonCheck powerButtonPressed) {
@@ -98,29 +118,14 @@ RadioResult listenForCode(const Code& code, const uint32_t listenMs, const Power
   scan->setInterval(RECEIVER_CYCLE_MS);
   scan->setWindow(RECEIVER_ON_MS);
 
-  RadioResult result = RadioResult::NothingHeard;
   LOG_DBG("FIND", "Listen start");
-  // Duration 0 scans until stop(): this loop owns the listening time.
-  if (!scan->start(0, /*isContinue=*/false, /*restart=*/true)) {
-    result = RadioResult::RadioFailed;
-  } else {
-    const uint32_t startedAt = millis();
-    while (millis() - startedAt < listenMs) {
-      if (listener.heard) {
-        result = RadioResult::HeardCode;
-        break;
-      }
-      if (powerButtonPressed()) {
-        result = RadioResult::ButtonPressed;
-        break;
-      }
-      delay(CHECK_EVERY_MS);
-    }
-    if (result == RadioResult::NothingHeard && listener.heard) result = RadioResult::HeardCode;
-    // Synchronous: the scan has stopped when this returns. The event it queues
-    // is handled by stopRadio().
-    scan->stop();
-  }
+  // Duration 0 scans until stop(): pollFor() owns the listening time.
+  if (!scan->start(0, /*isContinue=*/false, /*restart=*/true)) return RadioResult::RadioFailed;
+  RadioResult result = pollFor(listenMs, powerButtonPressed, &listener.heard, scanRunning, RadioResult::NothingHeard);
+  if (result == RadioResult::NothingHeard && listener.heard) result = RadioResult::HeardCode;
+  // Synchronous: the scan has stopped when this returns. The event it queues
+  // is handled by stopRadio().
+  scan->stop();
   LOG_DBG("FIND", "Listen end: %d", static_cast<int>(result));
   return result;
 }
@@ -148,15 +153,7 @@ RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck po
   advertising->setMaxInterval(FOUND_ADVERTISING_INTERVAL);
   if (!advertising->start()) return RadioResult::RadioFailed;
 
-  RadioResult result = RadioResult::TimeUp;
-  const uint32_t startedAt = millis();
-  while (millis() - startedAt < broadcastMs) {
-    if (powerButtonPressed()) {
-      result = RadioResult::ButtonPressed;
-      break;
-    }
-    delay(CHECK_EVERY_MS);
-  }
+  const RadioResult result = pollFor(broadcastMs, powerButtonPressed, nullptr, advertisingRunning, RadioResult::TimeUp);
   advertising->stop();
   return result;
 }
