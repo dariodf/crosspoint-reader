@@ -7,6 +7,7 @@
 namespace {
 
 using find_mode::FindState;
+using find_mode::ScanOutcome;
 using find_mode::TimerWakeAction;
 
 // A reader set to wake every 2 minutes and scan while the battery is at 15 % or more.
@@ -149,6 +150,50 @@ TEST(FindStateCrashes, AResetInsideTheFastPathWithoutACrashIsNotCounted) {
   const bool counted = state.fastPathCrashes != 0 || state.inFastPath != 0;
 
   EXPECT_FALSE(counted);
+}
+
+TEST(FindStateScan, HearingTheCodeAnnounces) {
+  FindState state = aValidState();
+
+  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+
+  EXPECT_EQ(outcome, ScanOutcome::Announce);
+}
+
+TEST(FindStateScan, SilenceSleeps) {
+  FindState state = aValidState();
+
+  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/false);
+
+  EXPECT_EQ(outcome, ScanOutcome::Sleep);
+}
+
+TEST(FindStateScan, AfterThePowerButtonTheCodeIsIgnored) {
+  FindState state = aValidState();
+  find_mode::muteUntilCodeGone(state);
+
+  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+
+  EXPECT_EQ(outcome, ScanOutcome::Sleep);
+}
+
+TEST(FindStateScan, OneQuietScanReArmsDetection) {
+  FindState state = aValidState();
+  find_mode::muteUntilCodeGone(state);
+  find_mode::afterScan(state, /*heardCode=*/false);
+
+  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+
+  EXPECT_EQ(outcome, ScanOutcome::Announce);
+}
+
+TEST(FindStateScan, AMutedStateKeepsAFreshChecksum) {
+  FindState state = aValidState();
+  find_mode::muteUntilCodeGone(state);
+
+  const bool valid = find_mode::isStateValid(state);
+
+  EXPECT_TRUE(valid);
 }
 
 TEST(FindStateCounters, TwoFastPathsAddUp) {

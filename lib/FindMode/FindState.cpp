@@ -38,6 +38,21 @@ void enterFastPath(FindState& state) {
   updateChecksum(state);
 }
 
+ScanOutcome afterScan(FindState& state, const bool heardCode) {
+  if (!state.mutedUntilCodeGone) return heardCode ? ScanOutcome::Announce : ScanOutcome::Sleep;
+
+  if (!heardCode) {
+    state.mutedUntilCodeGone = 0;
+    updateChecksum(state);
+  }
+  return ScanOutcome::Sleep;
+}
+
+void muteUntilCodeGone(FindState& state) {
+  state.mutedUntilCodeGone = 1;
+  updateChecksum(state);
+}
+
 void leaveFastPath(FindState& state, const uint32_t awakeMs, const bool detected) {
   state.inFastPath = 0;
   state.fastPathCrashes = 0;
