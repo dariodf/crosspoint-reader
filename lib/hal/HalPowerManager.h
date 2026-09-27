@@ -45,7 +45,7 @@ class HalPowerManager {
 
   // Also wake from deep sleep after this many seconds (find mode). 0 turns the
   // timer off. Applies to every later startDeepSleep() on this boot.
-  void setWakeTimer(uint32_t seconds) { wakeTimerSeconds = seconds; }
+  void setWakeTimerSeconds(uint32_t seconds) { wakeTimerSeconds = seconds; }
 
   // Get battery percentage (range 0-100)
   uint16_t getBatteryPercentage() const;

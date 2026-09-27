@@ -14,7 +14,7 @@
 //      stale bytes after a firmware change, so a CRC guards it.
 //   2. decideTimerWake(): scan, go straight back to sleep (low battery), or
 //      boot normally (state unusable, or the mode switched itself off).
-//   3. enterFastPath() ... scan ... afterScan() ... leaveFastPath().
+//   3. enterFastPath() ... scan ... decideAfterScan() ... leaveFastPath().
 //
 // Found mode ends with the power button, which calls muteUntilCodeGone(): the
 // phone may still be advertising, so later wakes ignore the code until one
@@ -73,17 +73,17 @@ TimerWakeAction decideTimerWake(const FindState& state, uint16_t batteryPercent)
 
 void enterFastPath(FindState& state);
 
-enum class ScanOutcome {
-  Announce,  // start found mode: advertise CP-FIND
+enum class AfterScanAction {
+  BroadcastFound,  // start found mode: broadcast CP-FIND
   Sleep,
 };
 
 // Decides what a finished scan leads to, and re-arms a muted mode once a scan
 // no longer hears the code.
-ScanOutcome afterScan(FindState& state, bool heardCode);
+AfterScanAction decideAfterScan(FindState& state, bool heardCode);
 
 void muteUntilCodeGone(FindState& state);
-void leaveFastPath(FindState& state, uint32_t awakeMs, bool detected);
+void leaveFastPath(FindState& state, uint32_t awakeMs, bool heardCode);
 
 // Call early on every boot with whether the reset was a crash (panic or
 // watchdog). Counts a crash only when the previous boot died inside the

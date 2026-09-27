@@ -38,14 +38,14 @@ void enterFastPath(FindState& state) {
   updateChecksum(state);
 }
 
-ScanOutcome afterScan(FindState& state, const bool heardCode) {
-  if (!state.mutedUntilCodeGone) return heardCode ? ScanOutcome::Announce : ScanOutcome::Sleep;
+AfterScanAction decideAfterScan(FindState& state, const bool heardCode) {
+  if (!state.mutedUntilCodeGone) return heardCode ? AfterScanAction::BroadcastFound : AfterScanAction::Sleep;
 
   if (!heardCode) {
     state.mutedUntilCodeGone = 0;
     updateChecksum(state);
   }
-  return ScanOutcome::Sleep;
+  return AfterScanAction::Sleep;
 }
 
 void muteUntilCodeGone(FindState& state) {
@@ -53,11 +53,11 @@ void muteUntilCodeGone(FindState& state) {
   updateChecksum(state);
 }
 
-void leaveFastPath(FindState& state, const uint32_t awakeMs, const bool detected) {
+void leaveFastPath(FindState& state, const uint32_t awakeMs, const bool heardCode) {
   state.inFastPath = 0;
   state.fastPathCrashes = 0;
   state.awakeMs += awakeMs;
-  if (detected) state.detections++;
+  if (heardCode) state.detections++;
   updateChecksum(state);
 }
 

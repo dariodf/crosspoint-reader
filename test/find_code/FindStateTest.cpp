@@ -6,8 +6,8 @@
 
 namespace {
 
+using find_mode::AfterScanAction;
 using find_mode::FindState;
-using find_mode::ScanOutcome;
 using find_mode::TimerWakeAction;
 
 // A reader set to wake every 2 minutes and scan while the battery is at 15 % or more.
@@ -152,39 +152,39 @@ TEST(FindStateCrashes, AResetInsideTheFastPathWithoutACrashIsNotCounted) {
   EXPECT_FALSE(counted);
 }
 
-TEST(FindStateScan, HearingTheCodeAnnounces) {
+TEST(FindStateScan, HearingTheCodeBroadcastsFound) {
   FindState state = aValidState();
 
-  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+  const AfterScanAction action = find_mode::decideAfterScan(state, /*heardCode=*/true);
 
-  EXPECT_EQ(outcome, ScanOutcome::Announce);
+  EXPECT_EQ(action, AfterScanAction::BroadcastFound);
 }
 
 TEST(FindStateScan, SilenceSleeps) {
   FindState state = aValidState();
 
-  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/false);
+  const AfterScanAction action = find_mode::decideAfterScan(state, /*heardCode=*/false);
 
-  EXPECT_EQ(outcome, ScanOutcome::Sleep);
+  EXPECT_EQ(action, AfterScanAction::Sleep);
 }
 
 TEST(FindStateScan, AfterThePowerButtonTheCodeIsIgnored) {
   FindState state = aValidState();
   find_mode::muteUntilCodeGone(state);
 
-  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+  const AfterScanAction action = find_mode::decideAfterScan(state, /*heardCode=*/true);
 
-  EXPECT_EQ(outcome, ScanOutcome::Sleep);
+  EXPECT_EQ(action, AfterScanAction::Sleep);
 }
 
 TEST(FindStateScan, OneQuietScanReArmsDetection) {
   FindState state = aValidState();
   find_mode::muteUntilCodeGone(state);
-  find_mode::afterScan(state, /*heardCode=*/false);
+  find_mode::decideAfterScan(state, /*heardCode=*/false);
 
-  const ScanOutcome outcome = find_mode::afterScan(state, /*heardCode=*/true);
+  const AfterScanAction action = find_mode::decideAfterScan(state, /*heardCode=*/true);
 
-  EXPECT_EQ(outcome, ScanOutcome::Announce);
+  EXPECT_EQ(action, AfterScanAction::BroadcastFound);
 }
 
 TEST(FindStateScan, AMutedStateKeepsAFreshChecksum) {

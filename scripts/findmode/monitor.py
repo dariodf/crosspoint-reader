@@ -3,8 +3,13 @@
     python3 scripts/findmode/monitor.py --seconds 600
 
 Needs `pip install bleak`. Prints one line per second while CP-FIND is heard
-(time, address, RSSI in dBm) and a line when it goes quiet, so a log shows
-when found mode started and stopped.
+(time and RSSI in dBm), and "FOUND started" / "FOUND stopped" lines around
+each stretch of sightings, so a log shows when found mode began and ended.
+
+macOS sometimes holds back repeated packets from the same device for a few
+seconds. A gap longer than GONE_AFTER_S then shows as a stop followed by a
+new start while the reader is still broadcasting; only the reader's own log
+says when found mode really ended.
 """
 
 import argparse
@@ -14,7 +19,8 @@ import time
 from bleak import BleakScanner
 
 FOUND_NAME = "CP-FIND"
-QUIET_AFTER_S = 3.0
+# Seconds without a CP-FIND packet before the reader counts as gone.
+GONE_AFTER_S = 3.0
 
 
 async def watch(seconds: int) -> None:
@@ -26,7 +32,7 @@ async def watch(seconds: int) -> None:
         if advertisement.local_name != FOUND_NAME:
             return
         now = time.time()
-        if last_seen == 0.0 or now - last_seen > QUIET_AFTER_S:
+        if last_seen == 0.0 or now - last_seen > GONE_AFTER_S:
             print(f"{time.strftime('%X')} FOUND started {device.address}", flush=True)
         last_seen = now
         if now - last_printed >= 1.0:
@@ -38,7 +44,7 @@ async def watch(seconds: int) -> None:
         end = time.time() + seconds
         while time.time() < end:
             await asyncio.sleep(0.5)
-            if last_seen and time.time() - last_seen > QUIET_AFTER_S:
+            if last_seen and time.time() - last_seen > GONE_AFTER_S:
                 print(f"{time.strftime('%X')} FOUND stopped", flush=True)
                 last_seen = 0.0
     print(f"{time.strftime('%X')} done", flush=True)
