@@ -5,22 +5,25 @@
 #include <Arduino.h>
 #include <Logging.h>
 #include <NimBLEDevice.h>
+#include <freertos/semphr.h>
+#include <nimble/porting/nimble/include/nimble/nimble_port.h>
 
-// Why the scan is timed by hand and torn down slowly
+// Why the teardown drains NimBLE's queue first
 //
-// NimBLE runs its own host task, which delivers scan results and scan events
-// through a queue. NimBLEScan::start(duration) can end a scan by itself, but
-// that "scan ended" event arrives on the host task at the moment the duration
-// runs out. Our fast path tears the stack down right after the same window, so
-// the event raced NimBLEDevice::deinit(): the host task ran a handler out of
-// memory that deinit had already released, jumped to address 0, and the chip
-// crashed (InstrFetchProhibited in NimBLEDevice::host_task, seen on the first
-// devkit run).
+// NimBLE runs its own host task, which works through an event queue. Stopping
+// a scan or an advertisement arms NimBLE's host timer to fire at once, which
+// queues an event. NimBLEDevice::deinit() then runs on our task and, while
+// shutting the host down, zeroes that timer's callout. If the queued event has
+// not run yet, the host task later calls its handler through a null pointer:
+// PC 0 in NimBLEDevice::host_task (InstrFetchProhibited). An earlier version
+// crashed exactly like that, when NimBLEScan::start(duration) ended the scan by
+// itself right as deinit ran.
 //
-// So the scan runs with no NimBLE duration and our loop decides when it ends;
-// stopScan() waits until NimBLE reports the scan stopped, and stopRadio() gives
-// the host task a moment to drain before deinit, then retries once, the same
-// pattern as the SDK's BleKeyboardHost::end().
+// So stopRadio() posts a marker event to the host queue and waits until the
+// host task has run it. The queue is first in, first out, so every event queued
+// before the marker (including the one from the stop) has run by then, and
+// nothing re-arms the timer once scanning and advertising are both stopped.
+// Only then does deinit tear the stack down.
 
 namespace find_mode {
 
@@ -28,9 +31,8 @@ namespace {
 
 // How often the loops check for the code or a power button press.
 static constexpr uint32_t CHECK_EVERY_MS = 10;
-// Time for the host task to drain its queue before deinit.
-static constexpr uint32_t TEARDOWN_SETTLE_MS = 20;
-static constexpr uint32_t SCAN_STOP_TIMEOUT_MS = 200;
+// Upper bound on waiting for the host task to reach the marker event.
+static constexpr uint32_t DRAIN_TIMEOUT_MS = 500;
 
 // NimBLE listens RECEIVER_ON_MS out of every RECEIVER_CYCLE_MS. Equal values
 // keep the receiver on for the whole listening time.
@@ -39,13 +41,18 @@ static constexpr uint16_t RECEIVER_ON_MS = 100;
 
 // In 0.625 ms units, as BLE defines it: 160 = one packet every 100 ms.
 static constexpr uint16_t FOUND_ADVERTISING_INTERVAL = 160;
-// A level every ESP32 BLE controller accepts.
+// A level every ESP32 BLE controller accepts; also the controller default.
 static constexpr int8_t FOUND_TX_POWER_DBM = 9;
 
-// onResult() runs on the NimBLE host task; listenForCode() polls `heard`.
+// onResult() runs on the NimBLE host task; listenForCode() polls `heard`. A
+// file-level object, so a result still being handled while the scan stops
+// never writes into a finished stack frame.
 class CodeListener : public NimBLEScanCallbacks {
  public:
-  explicit CodeListener(const Code& code) : code(code) {}
+  void listenFor(const Code& wanted) {
+    code = wanted;
+    heard = false;
+  }
 
   void onResult(const NimBLEAdvertisedDevice* device) override {
     const std::vector<uint8_t>& payload = device->getPayload();
@@ -55,17 +62,28 @@ class CodeListener : public NimBLEScanCallbacks {
   volatile bool heard = false;
 
  private:
-  const Code& code;
+  Code code{};
 };
+
+CodeListener listener;
 
 bool startRadio() { return NimBLEDevice::isInitialized() || NimBLEDevice::init(""); }
 
-// Stops the scan and waits for NimBLE to confirm it, so no scan event is still
-// queued when stopRadio() tears the stack down.
-void stopScan(NimBLEScan* scan) {
-  scan->stop();
-  const uint32_t startedAt = millis();
-  while (scan->isScanning() && millis() - startedAt < SCAN_STOP_TIMEOUT_MS) delay(CHECK_EVERY_MS);
+// The marker event for drainHostQueue(): the host task runs it and releases
+// the semaphore.
+StaticSemaphore_t drainedStorage;
+SemaphoreHandle_t drained = nullptr;
+ble_npl_event drainMarker;
+
+void onDrainMarker(ble_npl_event*) { xSemaphoreGive(drained); }
+
+// Waits until the host task has run everything queued so far. See the note at
+// the top of this file.
+bool drainHostQueue() {
+  if (drained == nullptr) drained = xSemaphoreCreateBinaryStatic(&drainedStorage);
+  ble_npl_event_init(&drainMarker, onDrainMarker, nullptr);
+  ble_npl_eventq_put(nimble_port_get_dflt_eventq(), &drainMarker);
+  return xSemaphoreTake(drained, pdMS_TO_TICKS(DRAIN_TIMEOUT_MS)) == pdTRUE;
 }
 
 }  // namespace
@@ -73,17 +91,16 @@ void stopScan(NimBLEScan* scan) {
 RadioResult listenForCode(const Code& code, const uint32_t listenMs, const PowerButtonCheck powerButtonPressed) {
   if (!startRadio()) return RadioResult::RadioFailed;
 
-  CodeListener listener(code);
+  listener.listenFor(code);
   NimBLEScan* scan = NimBLEDevice::getScan();
   scan->setScanCallbacks(&listener, /*wantDuplicates=*/false);
   scan->setActiveScan(false);  // passive: never send scan requests
   scan->setInterval(RECEIVER_CYCLE_MS);
   scan->setWindow(RECEIVER_ON_MS);
-  scan->setMaxResults(0);  // results go to the callback only, nothing kept on the heap
 
   RadioResult result = RadioResult::NothingHeard;
   LOG_DBG("FIND", "Listen start");
-  // Duration 0: scan until stopScan(). See the note at the top of this file.
+  // Duration 0 scans until stop(): this loop owns the listening time.
   if (!scan->start(0, /*isContinue=*/false, /*restart=*/true)) {
     result = RadioResult::RadioFailed;
   } else {
@@ -100,27 +117,33 @@ RadioResult listenForCode(const Code& code, const uint32_t listenMs, const Power
       delay(CHECK_EVERY_MS);
     }
     if (result == RadioResult::NothingHeard && listener.heard) result = RadioResult::HeardCode;
-    stopScan(scan);
+    // Synchronous: the scan has stopped when this returns. The event it queues
+    // is handled by stopRadio().
+    scan->stop();
   }
   LOG_DBG("FIND", "Listen end: %d", static_cast<int>(result));
-
-  // `listener` lives on this stack frame: detach it before returning.
-  scan->setScanCallbacks(nullptr);
   return result;
 }
 
 RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck powerButtonPressed) {
   if (!startRadio()) return RadioResult::RadioFailed;
 
+  // Broadcast from the random address NimBLE creates at every start, not the
+  // chip's permanent one: someone logging Bluetooth nearby cannot recognise the
+  // same reader from one found session to the next. The phone finds it by name.
+  NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM);
   NimBLEDevice::setPower(FOUND_TX_POWER_DBM);
+
+  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
+  // Non-connectable and non-scannable: a pure broadcast nobody can connect to
+  // or query. Set before the packet, because both calls rewrite the flags.
+  advertising->setConnectableMode(BLE_GAP_CONN_MODE_NON);
+  advertising->setDiscoverableMode(BLE_GAP_DISC_MODE_NON);
 
   NimBLEAdvertisementData packet;
   packet.setFlags(BLE_HS_ADV_F_DISC_GEN | BLE_HS_ADV_F_BREDR_UNSUP);
   packet.setName(FOUND_NAME);
-
-  NimBLEAdvertising* advertising = NimBLEDevice::getAdvertising();
   advertising->setAdvertisementData(packet);
-  advertising->setConnectableMode(BLE_GAP_CONN_MODE_NON);  // broadcast only, nobody can connect
   advertising->setMinInterval(FOUND_ADVERTISING_INTERVAL);
   advertising->setMaxInterval(FOUND_ADVERTISING_INTERVAL);
   if (!advertising->start()) return RadioResult::RadioFailed;
@@ -141,13 +164,9 @@ RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck po
 void stopRadio() {
   if (!NimBLEDevice::isInitialized()) return;
   LOG_DBG("FIND", "Radio stop");
-  delay(TEARDOWN_SETTLE_MS);
+  if (!drainHostQueue()) LOG_ERR("FIND", "NimBLE host did not drain in %lu ms", DRAIN_TIMEOUT_MS);
+  // deinit(true) also deletes the scan and advertising objects.
   NimBLEDevice::deinit(/*clearAll=*/true);
-  // deinit leaves the stack up when its stop raced another event: one more try.
-  if (NimBLEDevice::isInitialized()) {
-    delay(TEARDOWN_SETTLE_MS);
-    NimBLEDevice::deinit(/*clearAll=*/true);
-  }
   LOG_DBG("FIND", "Radio stopped");
 }
 

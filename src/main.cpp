@@ -423,7 +423,10 @@ void setup() {
   HalSystem::checkPanic();
 
   APP_STATE.loadFromFile();
-  const bool isSleepWake = wakeupReason == HalGPIO::WakeupReason::PowerButton;
+  // A timer wake that reaches this point is find mode handing over after the
+  // owner pressed power: it resumes like a power-button wake.
+  const bool isSleepWake =
+      wakeupReason == HalGPIO::WakeupReason::PowerButton || wakeupReason == HalGPIO::WakeupReason::Timer;
   const bool isPersistedSleepWake = isSleepWake && !APP_STATE.showBootScreen;
 
   if (recoveryFirmwareMode) {
@@ -439,6 +442,9 @@ void setup() {
     SETTINGS.readerMenuStyle = CrossPointSettings::READER_MENU_TOOLBAR;
   }
   SETTINGS.loadFromFile();
+#if CROSSPOINT_FIND_MODE
+  findModeSettingsLoaded();
+#endif
   // Push the saved timezone's POSIX rule into the clock (migrating the legacy
   // UTC-offset setting on first boot after the update).
   timezones::applyToClock();
@@ -466,6 +472,11 @@ void setup() {
         Storage.prepareForDeepSleep();
         powerManager.startDeepSleep(gpio);
       }
+      wakePowerReleasePending = true;
+      break;
+    case HalGPIO::WakeupReason::Timer:
+      // The press that ended find mode is still down: its release must not
+      // also run the short-press action.
       wakePowerReleasePending = true;
       break;
     case HalGPIO::WakeupReason::AfterUSBPower:

@@ -69,6 +69,10 @@ enum class TimerWakeAction {
   Scan,
 };
 
+// Passed as batteryPercent when the gauge could not be read. The reader keeps
+// listening: a flaky read must not silence it until the next button press.
+static constexpr uint16_t BATTERY_UNKNOWN = 0xFFFF;
+
 TimerWakeAction decideTimerWake(const FindState& state, uint16_t batteryPercent);
 
 void enterFastPath(FindState& state);
@@ -89,5 +93,8 @@ void leaveFastPath(FindState& state, uint32_t awakeMs, bool heardCode);
 // watchdog). Counts a crash only when the previous boot died inside the
 // fast path.
 void countFastPathCrash(FindState& state, bool resetWasCrash);
+
+// The owner asked to try again after the mode switched itself off.
+void retryAfterSwitchOff(FindState& state);
 
 }  // namespace find_mode

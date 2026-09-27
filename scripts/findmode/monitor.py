@@ -6,7 +6,7 @@ Needs `pip install bleak`. Prints one line per second while CP-FIND is heard
 (time and RSSI in dBm), and "FOUND started" / "FOUND stopped" lines around
 each stretch of sightings, so a log shows when found mode began and ended.
 
-macOS sometimes holds back repeated packets from the same device for a few
+On macOS, CoreBluetooth sometimes holds back repeated packets from the same device for a few
 seconds. A gap longer than GONE_AFTER_S then shows as a stop followed by a
 new start while the reader is still broadcasting; only the reader's own log
 says when found mode really ended.

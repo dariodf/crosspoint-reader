@@ -104,6 +104,14 @@ TEST(FindStateTimerWake, AtTheMinimumBatteryScans) {
   EXPECT_EQ(action, TimerWakeAction::Scan);
 }
 
+TEST(FindStateTimerWake, AnUnreadableBatteryScans) {
+  const FindState state = aValidState();
+
+  const TimerWakeAction action = find_mode::decideTimerWake(state, find_mode::BATTERY_UNKNOWN);
+
+  EXPECT_EQ(action, TimerWakeAction::Scan);
+}
+
 TEST(FindStateCrashes, TwoCrashesKeepTheModeOn) {
   const FindState state = afterCrashesInTheFastPath(2);
 
@@ -118,6 +126,15 @@ TEST(FindStateCrashes, ThreeCrashesInARowSwitchTheModeOff) {
   const TimerWakeAction action = find_mode::decideTimerWake(state, 80);
 
   EXPECT_EQ(action, TimerWakeAction::NormalBoot);
+}
+
+TEST(FindStateCrashes, RetryAfterASwitchOffScansAgain) {
+  FindState state = afterCrashesInTheFastPath(3);
+  find_mode::retryAfterSwitchOff(state);
+
+  const TimerWakeAction action = find_mode::decideTimerWake(state, 80);
+
+  EXPECT_EQ(action, TimerWakeAction::Scan);
 }
 
 TEST(FindStateCrashes, ACleanFastPathResetsTheCount) {

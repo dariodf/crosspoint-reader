@@ -28,7 +28,9 @@ bool isStateValid(const FindState& state) {
 
 TimerWakeAction decideTimerWake(const FindState& state, const uint16_t batteryPercent) {
   if (!isStateValid(state) || state.switchedOffByCrashes) return TimerWakeAction::NormalBoot;
-  if (batteryPercent < state.minBatteryPercent) return TimerWakeAction::SleepUntilButton;
+  if (batteryPercent != BATTERY_UNKNOWN && batteryPercent < state.minBatteryPercent) {
+    return TimerWakeAction::SleepUntilButton;
+  }
   return TimerWakeAction::Scan;
 }
 
@@ -69,6 +71,12 @@ void countFastPathCrash(FindState& state, const bool resetWasCrash) {
     state.fastPathCrashes++;
     if (state.fastPathCrashes >= FAST_PATH_CRASHES_TO_SWITCH_OFF) state.switchedOffByCrashes = 1;
   }
+  updateChecksum(state);
+}
+
+void retryAfterSwitchOff(FindState& state) {
+  state.switchedOffByCrashes = 0;
+  state.fastPathCrashes = 0;
   updateChecksum(state);
 }
 

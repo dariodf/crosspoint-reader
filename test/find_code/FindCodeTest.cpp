@@ -13,8 +13,8 @@ using find_mode::Code;
 
 constexpr std::string_view PROBE_CODE_TEXT = "c0de0001-f1d0-4b1e-9a5e-000000000001";
 
-// Captured by nRF Connect on a Pixel while the Mac advertised the probe code with bless.
-constexpr std::string_view PIXEL_PACKET = "02011A11070100000000005E9A1E4BD0F10100DEC0";
+// Captured by a phone scanner (nRF Connect) while a computer advertised the probe code.
+constexpr std::string_view CAPTURED_PACKET = "02011A11070100000000005E9A1E4BD0F10100DEC0";
 
 // The first probe packet: flags plus the name "CPFINDPROBE", no UUID.
 constexpr std::string_view NAME_ONLY_PACKET = "02011A0C09435046494E4450524F4245";
@@ -86,8 +86,8 @@ TEST(FindCodeFormat, WritesTheProbeCodeBack) {
   EXPECT_EQ(std::string_view(text), PROBE_CODE_TEXT);
 }
 
-TEST(FindCodeMatch, ThePixelPacketCarriesTheProbeCode) {
-  const auto packet = bytesFromHex(PIXEL_PACKET);
+TEST(FindCodeMatch, ACapturedPacketCarriesTheProbeCode) {
+  const auto packet = bytesFromHex(CAPTURED_PACKET);
 
   const bool matched = packetMatches(packet, probeCode());
 
@@ -104,7 +104,7 @@ TEST(FindCodeMatch, TheProbeCodeInTextOrderIsNotAMatch) {
 }
 
 TEST(FindCodeMatch, AnotherCodeIsNotAMatch) {
-  const auto packet = bytesFromHex(PIXEL_PACKET);
+  const auto packet = bytesFromHex(CAPTURED_PACKET);
   Code other{};
   find_mode::parseCode("c0de0001-f1d0-4b1e-9a5e-000000000002", other);
 

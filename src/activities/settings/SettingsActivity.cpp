@@ -18,6 +18,7 @@
 #include "ClearCacheActivity.h"
 #include "ClockSettingsActivity.h"
 #include "CrossPointSettings.h"
+#include "FindModeCodeActivity.h"
 #include "FontDownloadActivity.h"
 #include "HomeButtonSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
@@ -95,6 +96,9 @@ void SettingsActivity::rebuildSettingsLists() {
     controlsSettings.insert(controlsSettings.begin(),
                             SettingInfo::Action(StrId::STR_HOME_BUTTON, SettingAction::HomeButton));
   }
+#if CROSSPOINT_FIND_MODE
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_FIND_CODE, SettingAction::FindModeCode));
+#endif
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   // Clock configuration only exists where the RTC probe found hardware; on
   // clockless boards there is nothing to set.
@@ -365,6 +369,15 @@ void SettingsActivity::toggleCurrentSetting() {
         } else {
           LOG_ERR("SETTINGS", "OOM: ClockSettingsActivity");
         }
+        break;
+      case SettingAction::FindModeCode:
+#if CROSSPOINT_FIND_MODE
+        if (auto activity = makeUniqueNoThrow<FindModeCodeActivity>(renderer, mappedInput)) {
+          startActivityForResult(std::move(activity), resultHandler);
+        } else {
+          LOG_ERR("SETTINGS", "OOM: FindModeCodeActivity");
+        }
+#endif
         break;
       case SettingAction::KOReaderSync:
         startActivityForResult(std::make_unique<KOReaderSettingsActivity>(renderer, mappedInput), resultHandler);
