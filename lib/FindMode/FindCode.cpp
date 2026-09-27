@@ -4,8 +4,8 @@ namespace find_mode {
 
 namespace {
 
-static constexpr uint8_t AD_INCOMPLETE_UUID128 = 0x06;
-static constexpr uint8_t AD_COMPLETE_UUID128 = 0x07;
+static constexpr uint8_t UUID128_LIST_INCOMPLETE = 0x06;
+static constexpr uint8_t UUID128_LIST_COMPLETE = 0x07;
 
 // Hyphen positions in the canonical text.
 constexpr bool isHyphenAt(const size_t i) { return i == 8 || i == 13 || i == 18 || i == 23; }
@@ -17,10 +17,11 @@ constexpr int hexValue(const char c) {
   return -1;
 }
 
-// Air order is little-endian: the last text byte is sent first.
-bool isReversedCode(const uint8_t* uuid, const Code& code) {
+// `airUuid` is 16 bytes as received: little-endian, so the last byte of the
+// text form arrives first.
+bool airBytesMatchCode(const uint8_t* airUuid, const Code& code) {
   for (size_t i = 0; i < CODE_BYTES; i++) {
-    if (uuid[i] != code[CODE_BYTES - 1 - i]) return false;
+    if (airUuid[i] != code[CODE_BYTES - 1 - i]) return false;
   }
   return true;
 }
@@ -66,21 +67,21 @@ bool matchesCode(const uint8_t* payload, const size_t length, const Code& code) 
   if (payload == nullptr) return false;
 
   // Each AD structure is [length][type][data...], where length counts type + data.
-  size_t pos = 0;
-  while (pos < length) {
-    const size_t fieldLength = payload[pos];
-    if (fieldLength == 0 || pos + 1 + fieldLength > length) return false;
+  size_t recordStart = 0;
+  while (recordStart < length) {
+    const size_t recordLength = payload[recordStart];
+    if (recordLength == 0 || recordStart + 1 + recordLength > length) return false;
 
-    const uint8_t type = payload[pos + 1];
-    if (type == AD_COMPLETE_UUID128 || type == AD_INCOMPLETE_UUID128) {
+    const uint8_t type = payload[recordStart + 1];
+    if (type == UUID128_LIST_COMPLETE || type == UUID128_LIST_INCOMPLETE) {
       // One record can list several UUIDs; a trailing partial one is ignored.
-      const uint8_t* uuids = payload + pos + 2;
-      const size_t uuidCount = (fieldLength - 1) / CODE_BYTES;
+      const uint8_t* uuids = payload + recordStart + 2;
+      const size_t uuidCount = (recordLength - 1) / CODE_BYTES;
       for (size_t n = 0; n < uuidCount; n++) {
-        if (isReversedCode(uuids + n * CODE_BYTES, code)) return true;
+        if (airBytesMatchCode(uuids + n * CODE_BYTES, code)) return true;
       }
     }
-    pos += 1 + fieldLength;
+    recordStart += 1 + recordLength;
   }
   return false;
 }

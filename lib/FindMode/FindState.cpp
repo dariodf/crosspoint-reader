@@ -16,7 +16,7 @@ uint32_t stateCrc(const FindState& state) {
 
 }  // namespace
 
-void sealState(FindState& state) {
+void updateChecksum(FindState& state) {
   state.magic = STATE_MAGIC;
   state.version = STATE_VERSION;
   state.crc = stateCrc(state);
@@ -27,7 +27,7 @@ bool isStateValid(const FindState& state) {
 }
 
 TimerWakeAction decideTimerWake(const FindState& state, const uint16_t batteryPercent) {
-  if (!isStateValid(state) || state.disabledByFailures) return TimerWakeAction::NormalBoot;
+  if (!isStateValid(state) || state.switchedOffByCrashes) return TimerWakeAction::NormalBoot;
   if (batteryPercent < state.minBatteryPercent) return TimerWakeAction::SleepUntilButton;
   return TimerWakeAction::Scan;
 }
@@ -35,26 +35,26 @@ TimerWakeAction decideTimerWake(const FindState& state, const uint16_t batteryPe
 void enterFastPath(FindState& state) {
   state.inFastPath = 1;
   state.wakes++;
-  sealState(state);
+  updateChecksum(state);
 }
 
 void leaveFastPath(FindState& state, const uint32_t awakeMs, const bool detected) {
   state.inFastPath = 0;
-  state.fastPathFailures = 0;
+  state.fastPathCrashes = 0;
   state.awakeMs += awakeMs;
   if (detected) state.detections++;
-  sealState(state);
+  updateChecksum(state);
 }
 
-void noteBoot(FindState& state, const bool crashReset) {
+void countFastPathCrash(FindState& state, const bool resetWasCrash) {
   if (!isStateValid(state) || !state.inFastPath) return;
 
   state.inFastPath = 0;
-  if (crashReset) {
-    state.fastPathFailures++;
-    if (state.fastPathFailures >= MAX_FAST_PATH_FAILURES) state.disabledByFailures = 1;
+  if (resetWasCrash) {
+    state.fastPathCrashes++;
+    if (state.fastPathCrashes >= FAST_PATH_CRASHES_TO_SWITCH_OFF) state.switchedOffByCrashes = 1;
   }
-  sealState(state);
+  updateChecksum(state);
 }
 
 }  // namespace find_mode

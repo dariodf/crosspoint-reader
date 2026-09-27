@@ -10,32 +10,32 @@ using find_mode::FindState;
 using find_mode::TimerWakeAction;
 
 // A reader set to wake every 2 minutes and scan while the battery is at 15 % or more.
-FindState aSealedState() {
+FindState aValidState() {
   FindState state{};
   state.intervalMinutes = 2;
   state.minBatteryPercent = 15;
-  find_mode::sealState(state);
+  find_mode::updateChecksum(state);
   return state;
 }
 
 FindState afterCrashesInTheFastPath(int crashes) {
-  FindState state = aSealedState();
+  FindState state = aValidState();
   for (int i = 0; i < crashes; i++) {
     find_mode::enterFastPath(state);
-    find_mode::noteBoot(state, /*crashReset=*/true);
+    find_mode::countFastPathCrash(state, /*resetWasCrash=*/true);
   }
   return state;
 }
 
-TEST(FindStateSeal, ASealedStateIsValid) {
-  const FindState state = aSealedState();
+TEST(FindStateChecksum, AFreshChecksumIsValid) {
+  const FindState state = aValidState();
 
   const bool valid = find_mode::isStateValid(state);
 
   EXPECT_TRUE(valid);
 }
 
-TEST(FindStateSeal, AZeroedStateIsInvalid) {
+TEST(FindStateChecksum, AZeroedStateIsInvalid) {
   // RTC memory after a battery-empty cold boot.
   const FindState state{};
 
@@ -44,8 +44,8 @@ TEST(FindStateSeal, AZeroedStateIsInvalid) {
   EXPECT_FALSE(valid);
 }
 
-TEST(FindStateSeal, AChangedFieldBreaksTheSeal) {
-  FindState state = aSealedState();
+TEST(FindStateChecksum, AChangedFieldBreaksTheChecksum) {
+  FindState state = aValidState();
   state.minBatteryPercent = 5;
 
   const bool valid = find_mode::isStateValid(state);
@@ -53,8 +53,8 @@ TEST(FindStateSeal, AChangedFieldBreaksTheSeal) {
   EXPECT_FALSE(valid);
 }
 
-TEST(FindStateSeal, AChangedCodeByteBreaksTheSeal) {
-  FindState state = aSealedState();
+TEST(FindStateChecksum, AChangedCodeByteBreaksTheChecksum) {
+  FindState state = aValidState();
   state.code[7] ^= 0x01;
 
   const bool valid = find_mode::isStateValid(state);
@@ -62,8 +62,8 @@ TEST(FindStateSeal, AChangedCodeByteBreaksTheSeal) {
   EXPECT_FALSE(valid);
 }
 
-TEST(FindStateSeal, AnOlderVersionIsInvalid) {
-  FindState state = aSealedState();
+TEST(FindStateChecksum, AnOlderVersionIsInvalid) {
+  FindState state = aValidState();
   state.version = find_mode::STATE_VERSION - 1;
 
   const bool valid = find_mode::isStateValid(state);
@@ -72,7 +72,7 @@ TEST(FindStateSeal, AnOlderVersionIsInvalid) {
 }
 
 TEST(FindStateTimerWake, AValidStateScans) {
-  const FindState state = aSealedState();
+  const FindState state = aValidState();
 
   const TimerWakeAction action = find_mode::decideTimerWake(state, 80);
 
@@ -88,7 +88,7 @@ TEST(FindStateTimerWake, AnInvalidStateBootsNormally) {
 }
 
 TEST(FindStateTimerWake, BelowTheMinimumBatterySleepsUntilTheButton) {
-  const FindState state = aSealedState();
+  const FindState state = aValidState();
 
   const TimerWakeAction action = find_mode::decideTimerWake(state, 14);
 
@@ -96,14 +96,14 @@ TEST(FindStateTimerWake, BelowTheMinimumBatterySleepsUntilTheButton) {
 }
 
 TEST(FindStateTimerWake, AtTheMinimumBatteryScans) {
-  const FindState state = aSealedState();
+  const FindState state = aValidState();
 
   const TimerWakeAction action = find_mode::decideTimerWake(state, 15);
 
   EXPECT_EQ(action, TimerWakeAction::Scan);
 }
 
-TEST(FindStateFailures, TwoCrashesKeepTheModeOn) {
+TEST(FindStateCrashes, TwoCrashesKeepTheModeOn) {
   const FindState state = afterCrashesInTheFastPath(2);
 
   const TimerWakeAction action = find_mode::decideTimerWake(state, 80);
@@ -111,7 +111,7 @@ TEST(FindStateFailures, TwoCrashesKeepTheModeOn) {
   EXPECT_EQ(action, TimerWakeAction::Scan);
 }
 
-TEST(FindStateFailures, ThreeCrashesInARowSwitchTheModeOff) {
+TEST(FindStateCrashes, ThreeCrashesInARowSwitchTheModeOff) {
   const FindState state = afterCrashesInTheFastPath(3);
 
   const TimerWakeAction action = find_mode::decideTimerWake(state, 80);
@@ -119,40 +119,40 @@ TEST(FindStateFailures, ThreeCrashesInARowSwitchTheModeOff) {
   EXPECT_EQ(action, TimerWakeAction::NormalBoot);
 }
 
-TEST(FindStateFailures, ACleanFastPathResetsTheCount) {
+TEST(FindStateCrashes, ACleanFastPathResetsTheCount) {
   FindState state = afterCrashesInTheFastPath(2);
   find_mode::enterFastPath(state);
   find_mode::leaveFastPath(state, 900, false);
   find_mode::enterFastPath(state);
-  find_mode::noteBoot(state, /*crashReset=*/true);
+  find_mode::countFastPathCrash(state, /*resetWasCrash=*/true);
 
-  const uint8_t failures = state.fastPathFailures;
+  const uint8_t crashes = state.fastPathCrashes;
 
-  EXPECT_EQ(failures, 1);
+  EXPECT_EQ(crashes, 1);
 }
 
-TEST(FindStateFailures, ACrashOutsideTheFastPathIsNotCounted) {
-  FindState state = aSealedState();
-  find_mode::noteBoot(state, /*crashReset=*/true);
+TEST(FindStateCrashes, ACrashOutsideTheFastPathIsNotCounted) {
+  FindState state = aValidState();
+  find_mode::countFastPathCrash(state, /*resetWasCrash=*/true);
 
-  const uint8_t failures = state.fastPathFailures;
+  const uint8_t crashes = state.fastPathCrashes;
 
-  EXPECT_EQ(failures, 0);
+  EXPECT_EQ(crashes, 0);
 }
 
-TEST(FindStateFailures, AResetInsideTheFastPathWithoutACrashIsNotCounted) {
+TEST(FindStateCrashes, AResetInsideTheFastPathWithoutACrashIsNotCounted) {
   // For example a button press that interrupts the scan.
-  FindState state = aSealedState();
+  FindState state = aValidState();
   find_mode::enterFastPath(state);
-  find_mode::noteBoot(state, /*crashReset=*/false);
+  find_mode::countFastPathCrash(state, /*resetWasCrash=*/false);
 
-  const bool counted = state.fastPathFailures != 0 || state.inFastPath != 0;
+  const bool counted = state.fastPathCrashes != 0 || state.inFastPath != 0;
 
   EXPECT_FALSE(counted);
 }
 
 TEST(FindStateCounters, TwoFastPathsAddUp) {
-  FindState state = aSealedState();
+  FindState state = aValidState();
   find_mode::enterFastPath(state);
   find_mode::leaveFastPath(state, 900, false);
   find_mode::enterFastPath(state);

@@ -19,7 +19,10 @@
 //   02 01 1A                                   flags record
 //   11 07 01 00 00 00 00 00 5E 9A ... 00 DE C0 complete list of 128-bit UUIDs
 // On air the UUID bytes are reversed compared to the text: the text starts
-// "c0de" and the air bytes end "DE C0".
+// "c0de" and the air bytes end "DE C0". The Bluetooth spec sends every
+// multi-byte number least-significant byte first (little-endian), and a UUID
+// is one 128-bit number, while its text form is written most-significant
+// byte first.
 
 #include <array>
 #include <cstddef>

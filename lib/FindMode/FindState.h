@@ -17,9 +17,9 @@
 //   3. enterFastPath() ... scan ... leaveFastPath().
 //
 // Safety net: enterFastPath() raises a flag and leaveFastPath() clears it. If
-// the chip resets while the flag is up and the reset was a crash, noteBoot()
-// counts a failure. Three in a row switch the mode off, so a bug in the scan
-// cannot keep a reader crashing on every wake.
+// the chip resets while the flag is up and the reset was a crash,
+// countFastPathCrash() counts it. Three in a row switch the mode off, so a bug
+// in the scan cannot keep a reader crashing on every wake.
 //
 // Pure logic, no hardware: covered by the host tests in test/find_code/.
 
@@ -31,7 +31,7 @@ namespace find_mode {
 
 static constexpr uint32_t STATE_MAGIC = 0xF1ADC0DE;
 static constexpr uint8_t STATE_VERSION = 1;
-static constexpr uint8_t MAX_FAST_PATH_FAILURES = 3;
+static constexpr uint8_t FAST_PATH_CRASHES_TO_SWITCH_OFF = 3;
 
 // Field order leaves no padding bytes, so the CRC covers every byte before
 // `crc` and nothing uninitialised.
@@ -44,16 +44,16 @@ struct FindState {
   uint8_t version;
   uint8_t intervalMinutes;
   uint8_t minBatteryPercent;
-  uint8_t fastPathFailures;  // consecutive crashes inside the fast path
-  uint8_t inFastPath;        // raised on entry, cleared on a clean exit
-  uint8_t disabledByFailures;
+  uint8_t fastPathCrashes;  // consecutive crashes inside the fast path
+  uint8_t inFastPath;       // raised on entry, cleared on a clean exit
+  uint8_t switchedOffByCrashes;
   uint8_t reserved[2];
   uint32_t crc;
 };
 static_assert(sizeof(FindState) == 44, "FindState must have no padding");
 
-// Stamps magic, version and CRC. Call after every change to the struct.
-void sealState(FindState& state);
+// Stamps magic, version and checksum. Call after every change to the struct.
+void updateChecksum(FindState& state);
 
 // False for zeroed or corrupted RTC memory, or an older layout.
 bool isStateValid(const FindState& state);
@@ -70,8 +70,8 @@ void enterFastPath(FindState& state);
 void leaveFastPath(FindState& state, uint32_t awakeMs, bool detected);
 
 // Call early on every boot with whether the reset was a crash (panic or
-// watchdog). Counts a failure only when the previous boot died inside the
+// watchdog). Counts a crash only when the previous boot died inside the
 // fast path.
-void noteBoot(FindState& state, bool crashReset);
+void countFastPathCrash(FindState& state, bool resetWasCrash);
 
 }  // namespace find_mode
