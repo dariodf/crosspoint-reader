@@ -19,6 +19,7 @@ class HalPowerManager {
 
   mutable int _batteryCachedPercent = 0;         // Last read battery percentage (0-100)
   mutable unsigned long _batteryLastPollMs = 0;  // Timestamp of last battery read in milliseconds
+  uint32_t wakeTimerSeconds = 0;                 // 0 = sleep wakes on the power button only
 
   enum LockMode { None, NormalSpeed };
   LockMode currentLockMode = None;
@@ -41,6 +42,10 @@ class HalPowerManager {
   // Setup wake up GPIO and enter deep sleep
   // Should be called inside main loop() to handle the currentLockMode
   void startDeepSleep(HalGPIO& gpio) const;
+
+  // Also wake from deep sleep after this many seconds (find mode). 0 turns the
+  // timer off. Applies to every later startDeepSleep() on this boot.
+  void setWakeTimer(uint32_t seconds) { wakeTimerSeconds = seconds; }
 
   // Get battery percentage (range 0-100)
   uint16_t getBatteryPercentage() const;

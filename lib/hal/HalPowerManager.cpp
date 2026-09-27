@@ -128,6 +128,10 @@ void HalPowerManager::startDeepSleep(HalGPIO& gpio) const {
   }
 #endif
 
+  if (wakeTimerSeconds > 0) {
+    esp_sleep_enable_timer_wakeup(uint64_t{wakeTimerSeconds} * 1000000ULL);
+  }
+
   // Waits for the power button to be physically released (so holding it doesn't
   // immediately wake the device again), then arms the wake source and sleeps.
   freeink::PowerManager::deepSleepUntilPowerButton();

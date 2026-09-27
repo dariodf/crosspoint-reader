@@ -25,6 +25,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "FindModeRuntime.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
@@ -295,6 +296,9 @@ void enterDeepSleep(bool fromTimeout = false) {
   halTiltSensor.deepSleep();
   display.deepSleep();
   Storage.prepareForDeepSleep();
+#if CROSSPOINT_FIND_MODE
+  findModePrepareSleep(powerManager);
+#endif
   LOG_DBG("MAIN", "Entering deep sleep");
 
   powerManager.startDeepSleep(gpio);
@@ -380,6 +384,11 @@ void setup() {
   powerManager.begin();
 
   const auto wakeupReason = gpio.getWakeupReason();
+
+#if CROSSPOINT_FIND_MODE
+  findModeOnBoot(powerManager);
+  if (wakeupReason == HalGPIO::WakeupReason::Timer) findModeRunTimerWake(gpio, powerManager);
+#endif
   // Sample the wake hold now — a click wake is released within milliseconds of
   // boot — but defer the sleep-or-boot decision until SETTINGS is loaded below:
   // click-to-wake is a setting, and an X4 battery power-off cuts all power, so
