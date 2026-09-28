@@ -28,7 +28,7 @@ enum class SettingAction {
   TextSettings,
   KeyboardLayouts,
   HomeButton,
-  FindModeCode,
+  FindMode,
   About,
 };
 

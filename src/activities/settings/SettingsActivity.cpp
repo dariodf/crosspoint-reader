@@ -18,7 +18,7 @@
 #include "ClearCacheActivity.h"
 #include "ClockSettingsActivity.h"
 #include "CrossPointSettings.h"
-#include "FindModeCodeActivity.h"
+#include "FindModeActivity.h"
 #include "FontDownloadActivity.h"
 #include "HomeButtonSettingsActivity.h"
 #include "KOReaderSettingsActivity.h"
@@ -97,7 +97,7 @@ void SettingsActivity::rebuildSettingsLists() {
                             SettingInfo::Action(StrId::STR_HOME_BUTTON, SettingAction::HomeButton));
   }
 #if CROSSPOINT_FIND_MODE
-  systemSettings.push_back(SettingInfo::Action(StrId::STR_FIND_CODE, SettingAction::FindModeCode));
+  systemSettings.push_back(SettingInfo::Action(StrId::STR_FIND_MODE, SettingAction::FindMode));
 #endif
   systemSettings.push_back(SettingInfo::Action(StrId::STR_WIFI_NETWORKS, SettingAction::Network));
   // Clock configuration only exists where the RTC probe found hardware; on
@@ -370,12 +370,12 @@ void SettingsActivity::toggleCurrentSetting() {
           LOG_ERR("SETTINGS", "OOM: ClockSettingsActivity");
         }
         break;
-      case SettingAction::FindModeCode:
+      case SettingAction::FindMode:
 #if CROSSPOINT_FIND_MODE
-        if (auto activity = makeUniqueNoThrow<FindModeCodeActivity>(renderer, mappedInput)) {
+        if (auto activity = makeUniqueNoThrow<FindModeActivity>(renderer, mappedInput)) {
           startActivityForResult(std::move(activity), resultHandler);
         } else {
-          LOG_ERR("SETTINGS", "OOM: FindModeCodeActivity");
+          LOG_ERR("SETTINGS", "OOM: FindModeActivity");
         }
 #endif
         break;
@@ -541,18 +541,6 @@ std::string SettingsActivity::settingValueText(const SettingInfo& setting) {
       char valueBuffer[32];
       snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_SLEEP_TIMER_VALUE_FORMAT),
                static_cast<unsigned int>(SETTINGS.*(setting.valuePtr)));
-      return valueBuffer;
-    }
-    if (setting.valuePtr == &CrossPointSettings::findModeIntervalMinutes) {
-      char valueBuffer[32];
-      snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_SLEEP_TIMER_VALUE_FORMAT),
-               static_cast<unsigned int>(SETTINGS.findModeIntervalMinutes));
-      return valueBuffer;
-    }
-    if (setting.valuePtr == &CrossPointSettings::findModeMinBatteryPercent) {
-      char valueBuffer[32];
-      snprintf(valueBuffer, sizeof(valueBuffer), tr(STR_FIND_PERCENT_FORMAT),
-               static_cast<unsigned int>(SETTINGS.findModeMinBatteryPercent));
       return valueBuffer;
     }
     return std::to_string(SETTINGS.*(setting.valuePtr));

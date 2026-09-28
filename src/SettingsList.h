@@ -380,19 +380,18 @@ inline std::vector<SettingInfo> getSettingsList(const SdCardFontRegistry* regist
         SettingInfo::Toggle(StrId::STR_MOVE_FINISHED_TO_READ, &CrossPointSettings::moveFinishedToReadFolder,
                             "moveFinishedToReadFolder", StrId::STR_CAT_SYSTEM),
 #if CROSSPOINT_FIND_MODE
-        SettingInfo::Toggle(StrId::STR_FIND_MODE, &CrossPointSettings::findModeEnabled, "findModeEnabled",
-                            StrId::STR_CAT_SYSTEM),
+        // Persisted and web-exposed, category-less so the BLE Find Mode
+        // screen owns them on the device.
+        SettingInfo::Toggle(StrId::STR_FIND_MODE, &CrossPointSettings::findModeEnabled, "findModeEnabled"),
         SettingInfo::Value(
             StrId::STR_FIND_LISTEN_EVERY, &CrossPointSettings::findModeIntervalMinutes,
             {CrossPointSettings::FIND_INTERVAL_MIN_MINUTES, CrossPointSettings::FIND_INTERVAL_MAX_MINUTES, 1},
-            "findModeIntervalMinutes", StrId::STR_CAT_SYSTEM),
+            "findModeIntervalMinutes"),
         SettingInfo::Value(
             StrId::STR_FIND_STOP_BELOW, &CrossPointSettings::findModeMinBatteryPercent,
             {CrossPointSettings::FIND_MIN_BATTERY_LOWEST_PERCENT, CrossPointSettings::FIND_MIN_BATTERY_HIGHEST_PERCENT,
              CrossPointSettings::FIND_MIN_BATTERY_STEP_PERCENT},
-            "findModeMinBatteryPercent", StrId::STR_CAT_SYSTEM),
-        // The code: persisted and web-exposed, category-less so the Find mode
-        // code screen owns it on the device.
+            "findModeMinBatteryPercent"),
         SettingInfo::String(StrId::STR_FIND_CODE, &SETTINGS.findModeCode[0], sizeof(SETTINGS.findModeCode),
                             "findModeCode"),
 #endif

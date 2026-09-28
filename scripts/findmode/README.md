@@ -7,7 +7,7 @@ Press power to close." and broadcasts `CP-FIND` so a phone scanner can follow
 the signal strength to it. The broadcast keeps going while the phone keeps
 calling (up to 10 minutes) and stops 15 s after the last packet it heard
 from the phone. The code lives in `lib/FindMode/`, `src/FindModeRuntime.*` and
-`src/activities/settings/FindModeCodeActivity.*`.
+`src/activities/settings/FindModeActivity.*`.
 
 This page explains how it was checked and how to check it again. Almost all
 of it runs with nobody touching the device.
