@@ -4,11 +4,12 @@
 // mode on, the code's QR follows, so a phone copies it in one scan, and below
 // it a list that touch and buttons both work:
 //
+//   Stopped after crashes  only after the mode switched itself off; select
+//                       to retry
 //   <the code>          select to show the QR full screen
 //   <how-to>            where the code goes in nRF Connect
 //   Test mode           restarts into a one-minute listen, then echoes CP-FIND;
 //                       shows the last result
-//   <status>            Listening / Stopped after crashes (select to retry)
 //   Listen every        1 to 5 minutes; select to step
 //   Stop below battery  10, 15 or 20 %; select to step
 //   New code            asks first: a phone set up with the old code stops
@@ -31,9 +32,12 @@ class FindModeActivity final : public UiListActivity {
  private:
   static constexpr freeink::ui::ActionId ACTION_SWITCH = ACTION_USER;
 
-  enum Row { ROW_CODE, ROW_HOW_TO, ROW_TEST, ROW_STATUS, ROW_INTERVAL, ROW_MIN_BATTERY, ROW_NEW_CODE, ROW_COUNT };
+  enum Row { ROW_STATUS, ROW_CODE, ROW_HOW_TO, ROW_TEST, ROW_INTERVAL, ROW_MIN_BATTERY, ROW_NEW_CODE, ROW_COUNT };
 
   int listCount() const override;
+  // Rows before this one stay hidden: the status row shows only when there is
+  // a switch-off to retry.
+  int firstShownRow() const;
   const char* headerTitle() const override { return tr(STR_FIND_MODE); }
   void buildScreen(UiScreen& screen) override;
   void activateIndex(int index) override;
