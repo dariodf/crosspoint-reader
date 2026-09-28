@@ -1,12 +1,12 @@
 # CrossPoint Reader
 
-> **This fork adds BLE Find Mode to the Xteink X4 Pro:** a lost reader can be found with your phone. Everything else is CrossPoint as upstream ships it. Downloads are on the [Releases page](https://github.com/dariodf/crosspoint-reader/releases).
+> **This fork adds BLE Find Mode to the Xteink X4 Pro:** a lost reader can be found with your phone. Everything else is CrossPoint 1.6.5, with updates coming from this fork. Downloads are on the [Releases page](https://github.com/dariodf/crosspoint-reader/releases).
 
 ## BLE Find Mode
 
-While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 15 s after it stops. To everyone else the reader stays silent: it only listens until your phone calls.
+While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 15 s after the last call it hears. To everyone else the reader stays silent: it only listens until your phone calls.
 
-X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID works. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same.
+X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID should work. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same. Linking Bluetooth in costs about 187 KB of flash and about 24 KB of internal RAM, even with find mode off.
 
 ### 1. Install
 
