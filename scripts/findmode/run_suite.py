@@ -34,7 +34,11 @@ PROBE_CODE = "c0de0001-f1d0-4b1e-9a5e-000000000001"
 
 # JournalEvent and RadioResult values, as in lib/FindMode/FindJournal.h and FindRadio.h.
 (EV_BOOT, EV_BATTERY, EV_LISTEN_END, EV_FOUND_SCREEN, EV_BROADCAST_END, EV_HANDOVER, EV_SLEEP, EV_INJECT,
- EV_LISTEN_START, EV_HEARD_RSSI, EV_BROADCAST_QUIET) = range(1, 12)
+ EV_LISTEN_START, EV_HEARD_RSSI, EV_BROADCAST_QUIET, EV_TEST_END) = range(1, 13)
+# TestPhase in lib/FindMode/FindTest.h.
+TEST_HEARD, TEST_NOTHING_HEARD = 3, 4
+# Test mode listens this long (TEST_LISTEN_MS).
+TEST_LISTEN_S = 60
 HEARD, NOTHING_HEARD, TIME_UP, BUTTON_PRESSED, RADIO_FAILED, PHONE_GONE = range(6)
 ESP_RST_PANIC = 4
 ESP_RST_DEEPSLEEP = 8
@@ -376,6 +380,42 @@ class Suite:
                    f"{len(set(addresses))} distinct of {len(addresses)} sessions")
         self.press()
 
+    def scenario_test_mode(self):
+        """Test mode: a restart into a listen that hears the phone and echoes
+        CP-FIND, then one with the phone off that hears nothing."""
+        self.check("journal cleared", self.clear_journal(), "FIND_JOURNAL_CLEARED")
+        sessions_before = len(self.found_addresses())
+        self.start_emitter()
+        time.sleep(2)
+        sent_at = time.time()
+        self.device.send("FIND_TEST")
+        started = self.device.wait_for(r"^FIND_AWAKE ", 30, since=sent_at) is not None
+        self.check("test mode starts after the restart", started, "FIND_AWAKE")
+        broadcasting = False
+        for _ in range(40):
+            if len(self.found_addresses()) > sessions_before:
+                broadcasting = True
+                break
+            time.sleep(0.5)
+        self.check("it echoes CP-FIND", broadcasting, f"{len(self.found_addresses()) - sessions_before} new sessions")
+        stopped_at = time.time()
+        self.stop_emitter()
+        self.check("it boots on after the phone stops", self.wait_for_boot(stopped_at, PHONE_GONE_S + 30),
+                   "[MAIN] Device:")
+        ends = [e for e in (self.device.journal() or []) if e[1] == EV_TEST_END]
+        heard = bool(ends) and ends[-1][2] == TEST_HEARD and 20 <= ends[-1][3] <= 100
+        self.check("the test heard the phone", heard, f"phase {ends[-1][2]}, -{ends[-1][3]} dBm" if ends else "no TestEnd")
+
+        sent_at = time.time()
+        self.device.send("FIND_TEST")
+        self.check("a test with the phone off boots on", self.wait_for_boot(sent_at, TEST_LISTEN_S + 30),
+                   "[MAIN] Device:")
+        waited = time.time() - sent_at
+        ends = [e for e in (self.device.journal() or []) if e[1] == EV_TEST_END]
+        nothing = len(ends) >= 2 and ends[-1][2] == TEST_NOTHING_HEARD
+        self.check("it heard nothing after the full minute", nothing and waited >= TEST_LISTEN_S,
+                   f"phase {ends[-1][2] if ends else '-'}, {waited:.0f} s")
+
     def inject_and_sleep(self, injection):
         self.device.send(f"FIND_INJECT {injection}")
         ok = self.device.wait_for(r"FIND_INJECT_OK", 10) is not None
@@ -489,6 +529,7 @@ class Suite:
             self.scenario_quiet_and_heard,
             self.scenario_press_and_mute,
             self.scenario_phone_gone_and_address,
+            self.scenario_test_mode,
             self.scenario_radio_failure_keeps_mute,
             self.scenario_crashes_switch_off,
             self.scenario_hang_guard,

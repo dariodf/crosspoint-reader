@@ -7,9 +7,11 @@
 //                     findModeSettingsLoaded() once settings.json is read.
 //   enterDeepSleep(): findModePrepareSleep() copies the current settings into
 //                     RTC memory and arms the wake timer.
-//   Find mode code screen: findModeStatus(), findModeStats(),
+//   BLE Find Mode page: findModeStatus(),
 //                     findModeEnsureCode(), findModeNewCode(),
-//                     findModeRetryAfterSwitchOff().
+//                     findModeRetryAfterSwitchOff(), and the phone test:
+//                     findModeRequestTest(), then findModeLastTest().
+//   setup(), before Bluetooth's memory goes to the heap: findModeRunTest().
 //
 // The state lives in RTC_NOINIT memory: it survives deep sleep and crash
 // resets (so a crash inside the fast path can be counted), and holds garbage
@@ -17,6 +19,7 @@
 
 #include <HalGPIO.h>
 #include <HalPowerManager.h>
+#include <I18n.h>
 
 #include <cstdint>
 
@@ -51,14 +54,6 @@ enum class FindModeStatus {
 };
 FindModeStatus findModeStatus();
 
-// Counters for the sleeps since the code last changed. Reset after power loss.
-struct FindModeStats {
-  uint32_t wakes;
-  uint32_t detections;
-  uint32_t awakeMs;
-};
-FindModeStats findModeStats();
-
 // Creates a code when the stored one is missing or not valid UUID text (for
 // example edited by hand on the web settings page).
 void findModeEnsureCode();
@@ -69,6 +64,26 @@ void findModeNewCode();
 
 // Clears a crash switch-off so the next sleeps listen again.
 void findModeRetryAfterSwitchOff();
+
+// Draws a two-part message (a bold heading over an instruction) the way the
+// found screen does, and puts the display back to sleep. A heading with %d
+// shows `value`. Supplied by main.cpp.
+using FindModeMessageScreen = void (*)(uint8_t language, uint8_t orientation, StrId heading, StrId instruction,
+                                       int value);
+
+// Test mode: saves the settings, asks the next boot to run the test,
+// and restarts into Settings.
+void findModeRequestTest();
+
+// Early in setup(): runs a requested test. The screen shows it listening for up
+// to a minute; when it hears the phone, the signal and CP-FIND broadcasting
+// until the phone stops or the owner presses power. True when the owner
+// pressed power, whose release must not also act.
+bool findModeRunTest(HalGPIO& gpio, FindModeMessageScreen showMessage);
+
+enum class FindModeTestResult { None, Heard, NothingHeard, Failed, Stopped };
+// The last test's result; `rssi` is the phone's signal when heard.
+FindModeTestResult findModeLastTest(int& rssi);
 
 #if CROSSPOINT_FIND_MODE_TEST_HOOKS
 // Prints the state as one "FIND_STATE key=value ..." line (test builds).

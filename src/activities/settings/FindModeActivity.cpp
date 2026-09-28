@@ -41,7 +41,8 @@ void FindModeActivity::onEnter() {
   for (int i = 0; i < ROW_COUNT; i++) rows[i].actionValue = static_cast<int16_t>(i);
   rows[ROW_CODE].label = SETTINGS.findModeCode;
   rows[ROW_HOW_TO].label = tr(STR_FIND_CODE_HINT);
-  rows[ROW_STATUS].value = statsLine;
+  rows[ROW_TEST].label = tr(STR_FIND_TEST);
+  rows[ROW_TEST].value = testValue;
   rows[ROW_INTERVAL].label = tr(STR_FIND_LISTEN_EVERY);
   rows[ROW_INTERVAL].value = intervalValue;
   rows[ROW_MIN_BATTERY].label = tr(STR_FIND_STOP_BELOW);
@@ -65,6 +66,10 @@ void FindModeActivity::activateIndex(const int index) {
   switch (index) {
     case ROW_CODE:
       showQr();
+      return;
+    case ROW_TEST:
+      app.clearTapFlash();
+      findModeRequestTest();
       return;
     case ROW_STATUS:
       if (findModeStatus() == FindModeStatus::SwitchedOff) findModeRetryAfterSwitchOff();
@@ -163,9 +168,24 @@ void FindModeActivity::buildScreen(UiScreen& screen) {
       rows[ROW_STATUS].label = tr(STR_FIND_SWITCHED_OFF);
       break;
   }
-  const FindModeStats stats = findModeStats();
-  snprintf(statsLine, sizeof(statsLine), tr(STR_FIND_STATS), static_cast<unsigned long>(stats.wakes),
-           static_cast<unsigned long>(stats.detections));
+  int testRssi = 0;
+  switch (findModeLastTest(testRssi)) {
+    case FindModeTestResult::Heard:
+      snprintf(testValue, sizeof(testValue), tr(STR_FIND_TEST_RESULT_HEARD_FORMAT), testRssi);
+      break;
+    case FindModeTestResult::NothingHeard:
+      snprintf(testValue, sizeof(testValue), "%s", tr(STR_FIND_TEST_RESULT_NOTHING));
+      break;
+    case FindModeTestResult::Failed:
+      snprintf(testValue, sizeof(testValue), "%s", tr(STR_FIND_TEST_RESULT_FAILED));
+      break;
+    case FindModeTestResult::Stopped:
+      snprintf(testValue, sizeof(testValue), "%s", tr(STR_FIND_TEST_RESULT_STOPPED));
+      break;
+    case FindModeTestResult::None:
+      testValue[0] = '\0';
+      break;
+  }
   snprintf(intervalValue, sizeof(intervalValue), tr(STR_SLEEP_TIMER_VALUE_FORMAT),
            static_cast<unsigned int>(SETTINGS.findModeIntervalMinutes));
   snprintf(minBatteryValue, sizeof(minBatteryValue), tr(STR_FIND_PERCENT_FORMAT),

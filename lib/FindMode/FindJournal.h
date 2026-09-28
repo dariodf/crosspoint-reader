@@ -28,6 +28,7 @@ enum class JournalEvent : uint8_t {
   ListenStart,     // value: ms since boot when the scan started (0 when it never did)
   HeardRssi,       // detail: the phone's signal at the reader, as -dBm (60 = -60 dBm)
   BroadcastQuiet,  // value: ms between the phone's last packet and the broadcast's end
+  TestEnd,         // detail: TestPhase; value: the phone's signal as -dBm, 0 when not heard
 };
 
 struct JournalEntry {

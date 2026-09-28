@@ -2,10 +2,12 @@ add_executable(FindCodeTest
   FindCodeTest.cpp
   FindStateTest.cpp
   FindJournalTest.cpp
+  FindTestTest.cpp
   FindVersionTest.cpp
   ${REPO_ROOT}/lib/FindMode/FindCode.cpp
   ${REPO_ROOT}/lib/FindMode/FindState.cpp
   ${REPO_ROOT}/lib/FindMode/FindJournal.cpp
+  ${REPO_ROOT}/lib/FindMode/FindTest.cpp
 )
 
 target_include_directories(FindCodeTest PRIVATE ${REPO_ROOT}/lib/Serialization)
