@@ -2,7 +2,7 @@
 
 Find mode lets the owner of a lost X4 Pro find it with a phone. While asleep,
 the reader wakes every 1 to 5 minutes (2 by default), listens for half a second for a secret
-code the phone broadcasts, and when it hears it, shows "Find mode activated.
+code the phone broadcasts, and when it hears it, shows "BLE Find Mode activated.
 Press power to close." and broadcasts `CP-FIND` so a phone scanner can follow
 the signal strength to it. The broadcast keeps going while the phone keeps
 calling (up to 10 minutes) and stops 15 s after the last packet it heard
@@ -149,7 +149,7 @@ failed (`RadioResult` in `lib/FindMode/FindRadio.h`).
 
 - **The panel.** The dev board has no display: the suite checks the drawn
   framebuffer, and the panel's look is checked on the reader.
-- **Touch screens.** The Find mode code screen and the settings rows run only
+- **Touch screens.** The BLE Find Mode page (switch, QR, Test mode) runs only
   on the reader.
 - **The battery gauge.** A dev board has none; the fast path treats an
   unreadable gauge as "keep listening", and `FIND_INJECT battery` stands in
