@@ -24,18 +24,21 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from run_suite import EV_LISTEN_END, HEARD, NOTHING_HEARD, Device  # noqa: E402
 
 EV_LISTEN_START = 9
+EV_HEARD_RSSI = 10
 
 
 def wakes_in(journal):
-    """(listen_start_ms, listen_end_ms, result, end_rtc_ms) per wake, from ListenStart/ListenEnd pairs."""
+    """[listen_start_ms, listen_end_ms, result, end_rtc_ms, rssi_dbm] per wake, from ListenStart/ListenEnd pairs."""
     wakes = []
     start = None
     for rtc_ms, event, detail, value in journal:
         if event == EV_LISTEN_START:
             start = value
         elif event == EV_LISTEN_END and start is not None:
-            wakes.append((start, value, detail, rtc_ms))
+            wakes.append([start, value, detail, rtc_ms, None])
             start = None
+        elif event == EV_HEARD_RSSI and wakes:
+            wakes[-1][4] = -detail
     return wakes
 
 
@@ -45,6 +48,7 @@ def main():
     parser.add_argument("--count", type=int, default=20, help="detections to collect")
     parser.add_argument("--timeout-min", type=int, default=60)
     parser.add_argument("--out", help="file to append results to")
+    parser.add_argument("--broadcast-s", type=int, default=10, help="the build's found broadcast length")
     args = parser.parse_args()
 
     out = open(args.out, "a") if args.out else None
@@ -73,19 +77,24 @@ def main():
         if first_dump:
             # The journal survives flashing and earlier runs: only the wake
             # under way now belongs to this run.
-            seen.update(rtc_ms for _, _, _, rtc_ms in wakes[:-1])
+            seen.update(w[3] for w in wakes[:-1])
             first_dump = False
-        for start, stop, result, rtc_ms in wakes:
+        # Wall-clock time of each wake, from the RTC clock of the newest entry.
+        newest_rtc = journal[-1][0]
+        for start, stop, result, rtc_ms, rssi in wakes:
+            at = time.strftime('%X', time.localtime(time.time() - (newest_rtc - rtc_ms) / 1000))
             if rtc_ms in seen or start == 0:
                 continue
             seen.add(rtc_ms)
             if result == HEARD:
                 latencies.append(stop - start)
-                say(f"detection {len(latencies)}: heard {stop - start} ms after the scan started")
+                signal = f", phone at {rssi} dBm" if rssi is not None else ""
+                say(f"detection {len(latencies)} (wake {at}): heard {stop - start} ms after the scan started{signal}")
             elif result == NOTHING_HEARD:
                 misses += 1
-                say(f"miss: a full {stop - start} ms listen heard nothing")
-        time.sleep(12)  # past this broadcast, so the next dump sees the next wake
+                say(f"miss (wake {at}): a full {stop - start} ms listen heard nothing")
+        # Past this broadcast, so the next dump sees the next wake.
+        time.sleep(args.broadcast_s + 2)
 
     device.running = False
     if not latencies:

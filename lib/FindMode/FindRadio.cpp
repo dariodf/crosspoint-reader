@@ -52,14 +52,19 @@ class CodeListener : public NimBLEScanCallbacks {
   void listenFor(const Code& wanted) {
     code = wanted;
     heard = false;
+    rssi = 0;
   }
 
   void onResult(const NimBLEAdvertisedDevice* device) override {
     const std::vector<uint8_t>& payload = device->getPayload();
-    if (matchesCode(payload.data(), payload.size(), code)) heard = true;
+    if (matchesCode(payload.data(), payload.size(), code)) {
+      rssi = device->getRSSI();
+      heard = true;
+    }
   }
 
   volatile bool heard = false;
+  volatile int8_t rssi = 0;
 
  private:
   Code code{};
@@ -162,6 +167,8 @@ RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck po
 }
 
 uint32_t listenStartedAtMs() { return scanStartedAt; }
+
+int8_t heardRssi() { return listener.rssi; }
 
 void stopRadio() {
   if (!NimBLEDevice::isInitialized()) return;

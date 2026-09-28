@@ -199,6 +199,9 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
           : find_mode::listenForCode(sleepState.code, LISTEN_MS, powerButtonPressed);
   findTestRecord(find_mode::JournalEvent::ListenStart, 0, find_mode::listenStartedAtMs());
   findTestRecord(find_mode::JournalEvent::ListenEnd, static_cast<uint8_t>(listenResult), millis());
+  if (listenResult == find_mode::RadioResult::HeardCode) {
+    findTestRecord(find_mode::JournalEvent::HeardRssi, static_cast<uint8_t>(-find_mode::heardRssi()), 0);
+  }
   switch (listenResult) {
     case find_mode::RadioResult::ButtonPressed:
       LOG_INF("FIND", "Power button while listening, booting");

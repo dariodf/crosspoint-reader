@@ -37,6 +37,9 @@ RadioResult listenForCode(const Code& code, uint32_t listenMs, PowerButtonCheck 
 // millis() when the last listenForCode() scan started, 0 when it never did.
 // With the listen's end, gives how long the code took to be heard.
 uint32_t listenStartedAtMs();
+// Signal strength (dBm) of the packet that carried the code in the last
+// listenForCode(); 0 when the code was not heard.
+int8_t heardRssi();
 RadioResult broadcastFound(uint32_t broadcastMs, PowerButtonCheck powerButtonPressed);
 void stopRadio();
 
