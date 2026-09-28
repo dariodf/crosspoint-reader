@@ -16,6 +16,7 @@
 
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
+#include "FindModeTestHooks.h"
 
 namespace {
 
@@ -51,6 +52,7 @@ HalGPIO* gpioForButtonCheck = nullptr;
 bool powerButtonDownBefore = false;
 
 bool powerButtonPressed() {
+  if (findTestVirtualPress()) return true;
   const bool down = gpioForButtonCheck->isPowerButtonDown();
   const bool pressed = down && powerButtonDownBefore;
   powerButtonDownBefore = down;
@@ -120,10 +122,10 @@ bool settingsAvailable() {
 #endif
 }
 
+uint32_t armedTimerSeconds() { return find_mode::isArmed(sleepState) ? sleepState.intervalMinutes * 60U : 0; }
+
 // Every later sleep on this boot wakes on the timer too, while the mode is armed.
-void armWakeTimer(HalPowerManager& powerManager) {
-  powerManager.setWakeTimerSeconds(find_mode::isArmed(sleepState) ? sleepState.intervalMinutes * 60U : 0);
-}
+void armWakeTimer(HalPowerManager& powerManager) { powerManager.setWakeTimerSeconds(armedTimerSeconds()); }
 
 }  // namespace
 
@@ -131,6 +133,8 @@ void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager) {
   // A brownout while the radio ran means the battery cannot carry it. A full
   // boot (SD card, screen refresh) would draw more on the same weak cell and
   // brown out again, so sleep until the owner presses power.
+  findTestRecord(find_mode::JournalEvent::Boot, static_cast<uint8_t>(esp_reset_reason()),
+                 HalGPIO::isTimerWake() ? 1 : 0);
   const bool brownedOutInFastPath =
       esp_reset_reason() == ESP_RST_BROWNOUT && find_mode::isStateValid(sleepState) && sleepState.inFastPath;
   find_mode::countFastPathCrash(sleepState, resetWasCrash());
@@ -155,6 +159,10 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
     LOG_INF("FIND", "Battery gauge did not answer, listening anyway");
     battery = find_mode::BATTERY_UNKNOWN;
   }
+  uint16_t injectedBattery = 0;
+  const FindTestInjection injection = findTestTakeInjection(injectedBattery);
+  if (injection == FindTestInjection::Battery) battery = injectedBattery;
+  findTestRecord(find_mode::JournalEvent::Battery, 0, battery);
 
   switch (find_mode::decideTimerWake(sleepState, battery)) {
     case find_mode::TimerWakeAction::NormalBoot:
@@ -162,6 +170,7 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
       return;
     case find_mode::TimerWakeAction::SleepUntilButton:
       LOG_INF("FIND", "Battery below minimum, sleeping until the power button");
+      findTestRecord(find_mode::JournalEvent::Sleep, 1, 0);
       powerManager.setWakeTimerSeconds(0);
       powerManager.startDeepSleep(gpio);
       return;
@@ -172,10 +181,18 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
   gpioForButtonCheck = &gpio;
   find_mode::enterFastPath(sleepState);
   armFastPathGuard(LISTEN_BUDGET_MS);
+  if (injection == FindTestInjection::Crash) esp_system_abort("find mode test: injected crash");
+  if (injection == FindTestInjection::Hang) {
+    for (;;) delay(10);  // the guard aborts this after LISTEN_BUDGET_MS
+  }
 
   bool ownerPressedPower = false;
   bool heardCode = false;
-  const find_mode::RadioResult listenResult = find_mode::listenForCode(sleepState.code, LISTEN_MS, powerButtonPressed);
+  const find_mode::RadioResult listenResult =
+      injection == FindTestInjection::RadioFail
+          ? find_mode::RadioResult::RadioFailed
+          : find_mode::listenForCode(sleepState.code, LISTEN_MS, powerButtonPressed);
+  findTestRecord(find_mode::JournalEvent::ListenEnd, static_cast<uint8_t>(listenResult), millis());
   switch (listenResult) {
     case find_mode::RadioResult::ButtonPressed:
       LOG_INF("FIND", "Power button while listening, booting");
@@ -197,8 +214,13 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
         if (find_mode::needsFoundScreen(sleepState)) {
           showFoundScreen(sleepState.language, sleepState.orientation);
           find_mode::markFoundScreenShown(sleepState);
+          findTestRecord(find_mode::JournalEvent::FoundScreen, 0, millis());
         }
-        if (find_mode::broadcastFound(BROADCAST_MS, powerButtonPressed) == find_mode::RadioResult::ButtonPressed) {
+        const uint32_t broadcastStartedAt = millis();
+        const find_mode::RadioResult broadcastResult = find_mode::broadcastFound(BROADCAST_MS, powerButtonPressed);
+        findTestRecord(find_mode::JournalEvent::BroadcastEnd, static_cast<uint8_t>(broadcastResult),
+                       millis() - broadcastStartedAt);
+        if (broadcastResult == find_mode::RadioResult::ButtonPressed) {
           // The owner has the reader. Their phone may still be advertising, so
           // the next wakes ignore the code until one wake no longer hears it.
           find_mode::muteUntilCodeGone(sleepState);
@@ -215,9 +237,13 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
   find_mode::leaveFastPath(sleepState, millis(), heardCode);
   // A press during start-up or teardown missed the radio's checks. The sleep
   // path would wait for its release and sleep anyway, so look once more.
-  if (ownerPressedPower || gpio.isPowerButtonDown()) return;
+  if (ownerPressedPower || gpio.isPowerButtonDown()) {
+    findTestRecord(find_mode::JournalEvent::Handover, 0, 0);
+    return;
+  }
 
   // The wake timer armed by findModeOnBoot() is still set for this sleep.
+  findTestRecord(find_mode::JournalEvent::Sleep, 1, armedTimerSeconds());
   powerManager.startDeepSleep(gpio);
 }
 
@@ -257,6 +283,7 @@ void findModePrepareSleep(HalPowerManager& powerManager) {
           static_cast<unsigned long>(sleepState.wakes), static_cast<unsigned long>(sleepState.detections),
           static_cast<unsigned long>(sleepState.awakeMs));
   armWakeTimer(powerManager);
+  findTestRecord(find_mode::JournalEvent::Sleep, 0, armedTimerSeconds());
 }
 
 FindModeStatus findModeStatus() {
@@ -294,5 +321,18 @@ void findModeNewCode() {
 void findModeRetryAfterSwitchOff() {
   if (find_mode::isStateValid(sleepState)) find_mode::retryAfterSwitchOff(sleepState);
 }
+
+#if CROSSPOINT_FIND_MODE_TEST_HOOKS
+void findModePrintState() {
+  const find_mode::FindState& s = sleepState;
+  logSerial.printf(
+      "FIND_STATE valid=%d armed=%d wakes=%lu detections=%lu awakeMs=%lu crashes=%u switchedOff=%u muted=%u "
+      "inFastPath=%u interval=%u minBattery=%u language=%u orientation=%u foundScreen=%u\n",
+      find_mode::isStateValid(s), find_mode::isArmed(s), static_cast<unsigned long>(s.wakes),
+      static_cast<unsigned long>(s.detections), static_cast<unsigned long>(s.awakeMs), s.fastPathCrashes,
+      s.switchedOffByCrashes, s.mutedUntilCodeGone, s.inFastPath, s.intervalMinutes, s.minBatteryPercent, s.language,
+      s.orientation, s.foundScreenShown);
+}
+#endif
 
 #endif  // CROSSPOINT_FIND_MODE

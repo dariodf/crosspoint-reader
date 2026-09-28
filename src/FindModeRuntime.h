@@ -69,3 +69,8 @@ void findModeNewCode();
 
 // Clears a crash switch-off so the next sleeps listen again.
 void findModeRetryAfterSwitchOff();
+
+#if CROSSPOINT_FIND_MODE_TEST_HOOKS
+// Prints the state as one "FIND_STATE key=value ..." line (test builds).
+void findModePrintState();
+#endif

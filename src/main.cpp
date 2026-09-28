@@ -29,6 +29,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FindModeRuntime.h"
+#include "FindModeTestHooks.h"
 #include "KOReaderCredentialStore.h"
 #include "MappedInputManager.h"
 #include "OpdsServerStore.h"
@@ -327,20 +328,42 @@ void resolvePanelController() {
 // Find mode's found screen, drawn from the timer-wake fast path: before the SD
 // card and settings.json, so it uses a built-in UI font and the language and
 // orientation find mode saved at the last sleep.
-void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
+// Draws the found screen into the framebuffer. Shared with the FIND_PREVIEW
+// test command, so a screenshot shows exactly what the fast path draws.
+void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
   I18N.setLanguage(static_cast<Language>(language));
-  resolvePanelController();
-  display.begin();
-  renderer.begin();
   ReaderUtils::applyOrientation(renderer, orientation);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.clearScreen();
+  // Both lines wrap inside side margins, so a long translation stays clear of
+  // the bezel; the block is centred as a whole.
+  static constexpr int SIDE_MARGIN = 24;
+  static constexpr int MAX_LINES = 3;
+  const int width = renderer.getScreenWidth() - 2 * SIDE_MARGIN;
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const int middle = renderer.getScreenHeight() / 2;
-  renderer.drawCenteredText(UI_12_FONT_ID, middle - lineHeight, tr(STR_FIND_MODE_ACTIVATED), true, EpdFontFamily::BOLD);
-  renderer.drawCenteredText(UI_12_FONT_ID, middle + lineHeight / 2, tr(STR_FIND_PRESS_POWER_TO_CLOSE));
-  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  const auto heading =
+      renderer.wrappedText(UI_12_FONT_ID, tr(STR_FIND_MODE_ACTIVATED), width, MAX_LINES, EpdFontFamily::BOLD);
+  const auto instruction = renderer.wrappedText(UI_12_FONT_ID, tr(STR_FIND_PRESS_POWER_TO_CLOSE), width, MAX_LINES);
+  const int blockHeight = static_cast<int>(heading.size() + instruction.size()) * lineHeight + lineHeight / 2;
+  int y = (renderer.getScreenHeight() - blockHeight) / 2;
+  for (const std::string& line : heading) {
+    renderer.drawCenteredText(UI_12_FONT_ID, y, line.c_str(), true, EpdFontFamily::BOLD);
+    y += lineHeight;
+  }
+  y += lineHeight / 2;
+  for (const std::string& line : instruction) {
+    renderer.drawCenteredText(UI_12_FONT_ID, y, line.c_str());
+    y += lineHeight;
+  }
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
+}
+
+void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
+  resolvePanelController();
+  display.begin();
+  renderer.begin();
+  drawFindModeScreen(language, orientation);
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
   display.deepSleep();
 }
 #endif
@@ -703,6 +726,27 @@ void loop() {
         logSerial.write(buf, bufferSize);
         logSerial.printf("SCREENSHOT_END\n");
       }
+#if CROSSPOINT_FIND_MODE_TEST_HOOKS
+      else if (cmd == "FIND_SLEEP") {
+        logSerial.printf("FIND_SLEEP_OK\n");
+        enterDeepSleep();
+      } else if (cmd.startsWith("FIND_PREVIEW ")) {
+        // FIND_PREVIEW <language> <orientation>: the found screen into the
+        // framebuffer, for a following SCREENSHOT.
+        int language = 0;
+        int orientation = 0;
+        sscanf(cmd.c_str() + 13, "%d %d", &language, &orientation);
+        {
+          RenderLock lock;
+          drawFindModeScreen(static_cast<uint8_t>(language), static_cast<uint8_t>(orientation));
+          renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+        }
+        I18N.setLanguage(static_cast<Language>(SETTINGS.language));
+        logSerial.printf("FIND_PREVIEW_OK\n");
+      } else if (!findTestCommand(cmd.c_str())) {
+        logSerial.printf("FIND_UNKNOWN %s\n", cmd.c_str());
+      }
+#endif
     }
   }
 
