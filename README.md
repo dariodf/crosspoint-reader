@@ -1,5 +1,66 @@
 # CrossPoint Reader
 
+> **This fork adds BLE Find Mode to the Xteink X4 Pro:** a lost reader can be found with your phone. Everything else is CrossPoint as upstream ships it. Downloads are on the [Releases page](https://github.com/dariodf/crosspoint-reader/releases).
+
+## BLE Find Mode
+
+While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 15 s after it stops. To everyone else the reader stays silent: it only listens until your phone calls.
+
+X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID works. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same.
+
+### 1. Install
+
+Download `crosspoint-<version>-x4pro.bin` from the [latest release](https://github.com/dariodf/crosspoint-reader/releases/latest), copy it to the SD card (File Transfer puts the card on your computer as a USB drive), then on the reader open Settings > System > SD Card Firmware Update and pick the file. Later releases arrive over Wi-Fi with Settings > System > Check for Updates.
+
+Every release is built by GitHub Actions from its tagged commit, with a checksum and a build attestation. To check a download:
+
+```sh
+shasum -a 256 -c SHA256SUMS
+gh attestation verify crosspoint-<version>-x4pro.bin --repo dariodf/crosspoint-reader
+```
+
+### 2. Turn it on
+
+Settings > System > **BLE Find Mode**, then flip the switch. The page shows your code as a QR and as text, and below it Test mode, how often it listens, and the battery level where it stops.
+
+<table><tr>
+<td><img src="docs/images/ble-find-mode/01-settings.jpg" width="220" alt="Settings, System tab, with the BLE Find Mode row"></td>
+<td><img src="docs/images/ble-find-mode/02-page-qr.jpg" width="220" alt="BLE Find Mode page: the switch on, the QR, the code and the steps"></td>
+<td><img src="docs/images/ble-find-mode/03-page-rows.jpg" width="220" alt="BLE Find Mode page scrolled: Listen every, Stop below battery, New code"></td>
+</tr></table>
+
+### 3. Set up your phone
+
+Copy the code to your phone: Android's Quick Settings QR scanner copies it to the clipboard in one scan. In nRF Connect, open **Advertiser**, tap **+**, then **Add record** > **Service UUID** and paste the code (lowercase, with dashes). Leave Connectable and Scannable off, set the interval to 160 (100 ms) and TX power to the highest it allows. Save it: the advertiser stays in the list, switched off, until you need it.
+
+<table><tr>
+<td><img src="docs/images/ble-find-mode/04-nrf-new-packet.jpg" width="220" alt="nRF Connect new advertising packet with the 128-bit service UUID, interval 160, TX power 1 dBm"></td>
+<td><img src="docs/images/ble-find-mode/05-nrf-advertiser-off.jpg" width="220" alt="nRF Connect Advertiser tab with the saved packet switched off"></td>
+</tr></table>
+
+### 4. Check it with Test mode
+
+Tap **Test mode**. The reader restarts and listens for up to a minute; switch the advertiser on. When the reader hears your phone it shows the signal and broadcasts `CP-FIND`, which appears in nRF Connect's **Scanner** (type `CP-FIND` in its filter). Switch the advertiser off, and about 15 s later the reader goes back to Settings with the result on the Test mode row.
+
+<table><tr>
+<td><img src="docs/images/ble-find-mode/07-test-listening.jpg" width="220" alt="Reader screen: Listening for your phone"></td>
+<td><img src="docs/images/ble-find-mode/06-nrf-advertiser-on.jpg" width="220" alt="nRF Connect advertiser switched on"></td>
+<td><img src="docs/images/ble-find-mode/08-test-heard.jpg" width="220" alt="Reader screen: Heard your phone, -63 dBm, broadcasting CP-FIND"></td>
+</tr></table>
+
+### 5. Find it
+
+When the reader is lost, switch the advertiser on and wait: the reader answers at its next wake (every 2 minutes by default). Open the Scanner, find `CP-FIND` and swipe right on it for the signal graph. The closer you get, the higher the line. Press power on the reader to close the found screen, and switch the advertiser off.
+
+<table><tr>
+<td><img src="docs/images/ble-find-mode/09-nrf-scanner.jpg" width="220" alt="nRF Connect Scanner filtered to CP-FIND at -51 dBm"></td>
+<td><img src="docs/images/ble-find-mode/10-nrf-signal-graph.jpg" width="220" alt="nRF Connect signal graph for CP-FIND over 45 seconds, dipping to -85 dBm and climbing back to -50 dBm"></td>
+</tr></table>
+
+The feature's code and how it was tested: [`scripts/findmode/README.md`](scripts/findmode/README.md).
+
+---
+
 [![Fund contributors](https://img.shields.io/badge/%F0%9F%91%91_Fund_contributors-royalty.dev-BB953A?style=for-the-badge&labelColor=1a1a1a)](https://app.royalty.dev/crosspoint-reader/crosspoint-reader)
 
 CrossPoint is open-source e-reader firmware - community-built, fully hackable, free forever. It's maintained by a growing community of developers and readers who believe your device should do what you want - not what a manufacturer decided for you.
