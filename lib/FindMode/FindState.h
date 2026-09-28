@@ -54,7 +54,8 @@ struct FindState {
   uint8_t mutedUntilCodeGone;  // set by the power button in found mode
   uint8_t language;            // UI language for the found screen (settings.json is not read on a timer wake)
   uint8_t foundScreenShown;    // the found screen is on the panel; cleared when the sleep screen replaces it
-  uint8_t reserved[3];
+  uint8_t orientation;         // CrossPointSettings orientation the found screen is drawn in
+  uint8_t reserved[2];
   uint32_t crc;
 };
 static_assert(sizeof(FindState) == 48, "FindState must have no padding");

@@ -303,7 +303,7 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   static constexpr uint8_t FIND_MIN_BATTERY_HIGHEST_PERCENT = 20;
   static constexpr uint8_t FIND_MIN_BATTERY_STEP_PERCENT = 5;
   uint8_t findModeEnabled = 0;
-  uint8_t findModeIntervalMinutes = 1;
+  uint8_t findModeIntervalMinutes = 2;
   uint8_t findModeMinBatteryPercent = 15;
   char findModeCode[37] = "";
   // E-ink refresh frequency (default 15 pages)

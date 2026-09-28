@@ -15,6 +15,7 @@
 #include <esp_timer.h>
 
 #include "CrossPointSettings.h"
+#include "CrossPointState.h"
 
 namespace {
 
@@ -194,7 +195,7 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
         // Tells whoever holds the reader what is going on. Drawn once: e-ink
         // keeps it through every later sleep until the next sleep screen.
         if (find_mode::needsFoundScreen(sleepState)) {
-          showFoundScreen(sleepState.language);
+          showFoundScreen(sleepState.language, sleepState.orientation);
           find_mode::markFoundScreenShown(sleepState);
         }
         if (find_mode::broadcastFound(BROADCAST_MS, powerButtonPressed) == find_mode::RadioResult::ButtonPressed) {
@@ -244,6 +245,10 @@ void findModePrepareSleep(HalPowerManager& powerManager) {
   sleepState.intervalMinutes = settings.intervalMinutes;
   sleepState.minBatteryPercent = settings.minBatteryPercent;
   sleepState.language = SETTINGS.language;
+  // Same rule as the sleep screen's popup: the reading orientation when the
+  // reader went to sleep from a book, portrait otherwise.
+  sleepState.orientation =
+      APP_STATE.lastSleepFromReader ? SETTINGS.orientation : static_cast<uint8_t>(CrossPointSettings::PORTRAIT);
   // This sleep draws the sleep screen over any found screen.
   sleepState.foundScreenShown = 0;
   find_mode::updateChecksum(sleepState);

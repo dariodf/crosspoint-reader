@@ -36,6 +36,7 @@
 #include "SdCardFontSystem.h"
 #include "activities/Activity.h"
 #include "activities/ActivityManager.h"
+#include "activities/reader/ReaderUtils.h"
 #include "activities/settings/SdFirmwareUpdateActivity.h"
 #include "components/UITheme.h"
 #include "fontIds.h"
@@ -324,13 +325,14 @@ void resolvePanelController() {
 
 #if CROSSPOINT_FIND_MODE
 // Find mode's found screen, drawn from the timer-wake fast path: before the SD
-// card and settings.json, so it uses a built-in UI font and the language
-// find mode saved at the last sleep.
-void showFindModeScreen(const uint8_t language) {
+// card and settings.json, so it uses a built-in UI font and the language and
+// orientation find mode saved at the last sleep.
+void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
   I18N.setLanguage(static_cast<Language>(language));
   resolvePanelController();
   display.begin();
   renderer.begin();
+  ReaderUtils::applyOrientation(renderer, orientation);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
   renderer.clearScreen();
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
@@ -338,6 +340,7 @@ void showFindModeScreen(const uint8_t language) {
   renderer.drawCenteredText(UI_12_FONT_ID, middle - lineHeight, tr(STR_FIND_MODE_ON), true, EpdFontFamily::BOLD);
   renderer.drawCenteredText(UI_12_FONT_ID, middle + lineHeight / 2, tr(STR_FIND_PRESS_POWER_TO_STOP));
   renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  renderer.setOrientation(GfxRenderer::Orientation::Portrait);
   display.deepSleep();
 }
 #endif
