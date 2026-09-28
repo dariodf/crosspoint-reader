@@ -25,6 +25,7 @@ enum class JournalEvent : uint8_t {
   Handover,      // the owner pressed power: normal boot follows
   Sleep,         // detail: 1 from the fast path, 0 from a normal sleep; value: timer seconds
   Inject,        // detail: TestInjection consumed by this wake
+  ListenStart,   // value: ms since boot when the scan started (0 when it never did)
 };
 
 struct JournalEntry {

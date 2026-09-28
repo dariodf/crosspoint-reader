@@ -27,7 +27,12 @@ static constexpr uint32_t LISTEN_MS = 500;
 // How long found mode broadcasts CP-FIND before sleeping again. Short, to save
 // battery: while the phone keeps advertising, the next wake hears it again
 // and starts another broadcast.
+#ifdef CROSSPOINT_FIND_MODE_TEST_BROADCAST_SECONDS
+// Test builds that collect detection timings cycle faster with a short broadcast.
+static constexpr uint32_t BROADCAST_MS = CROSSPOINT_FIND_MODE_TEST_BROADCAST_SECONDS * 1000UL;
+#else
 static constexpr uint32_t BROADCAST_MS = 60UL * 1000UL;
+#endif
 
 // Time budgets for the fast-path guard below. Listening covers NimBLE start-up
 // (normally ~0.3 s), the listen itself and the teardown.
@@ -192,6 +197,7 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
       injection == FindTestInjection::RadioFail
           ? find_mode::RadioResult::RadioFailed
           : find_mode::listenForCode(sleepState.code, LISTEN_MS, powerButtonPressed);
+  findTestRecord(find_mode::JournalEvent::ListenStart, 0, find_mode::listenStartedAtMs());
   findTestRecord(find_mode::JournalEvent::ListenEnd, static_cast<uint8_t>(listenResult), millis());
   switch (listenResult) {
     case find_mode::RadioResult::ButtonPressed:

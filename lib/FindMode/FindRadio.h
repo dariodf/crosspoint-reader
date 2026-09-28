@@ -34,6 +34,9 @@ enum class RadioResult {
 static constexpr char FOUND_NAME[] = "CP-FIND";
 
 RadioResult listenForCode(const Code& code, uint32_t listenMs, PowerButtonCheck powerButtonPressed);
+// millis() when the last listenForCode() scan started, 0 when it never did.
+// With the listen's end, gives how long the code took to be heard.
+uint32_t listenStartedAtMs();
 RadioResult broadcastFound(uint32_t broadcastMs, PowerButtonCheck powerButtonPressed);
 void stopRadio();
 

@@ -66,6 +66,7 @@ class CodeListener : public NimBLEScanCallbacks {
 };
 
 CodeListener listener;
+uint32_t scanStartedAt = 0;
 
 bool startRadio() { return NimBLEDevice::isInitialized() || NimBLEDevice::init(""); }
 
@@ -109,6 +110,7 @@ RadioResult pollFor(const uint32_t ms, const PowerButtonCheck powerButtonPressed
 }  // namespace
 
 RadioResult listenForCode(const Code& code, const uint32_t listenMs, const PowerButtonCheck powerButtonPressed) {
+  scanStartedAt = 0;
   if (!startRadio()) return RadioResult::RadioFailed;
 
   listener.listenFor(code);
@@ -121,6 +123,7 @@ RadioResult listenForCode(const Code& code, const uint32_t listenMs, const Power
   LOG_DBG("FIND", "Listen start");
   // Duration 0 scans until stop(): pollFor() owns the listening time.
   if (!scan->start(0, /*isContinue=*/false, /*restart=*/true)) return RadioResult::RadioFailed;
+  scanStartedAt = millis();
   RadioResult result = pollFor(listenMs, powerButtonPressed, &listener.heard, scanRunning, RadioResult::NothingHeard);
   if (result == RadioResult::NothingHeard && listener.heard) result = RadioResult::HeardCode;
   // Synchronous: the scan has stopped when this returns. The event it queues
@@ -157,6 +160,8 @@ RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck po
   advertising->stop();
   return result;
 }
+
+uint32_t listenStartedAtMs() { return scanStartedAt; }
 
 void stopRadio() {
   if (!NimBLEDevice::isInitialized()) return;
