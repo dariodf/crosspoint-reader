@@ -4,7 +4,7 @@
 
 ## BLE Find Mode
 
-While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 15 s after the last call it hears. To everyone else the reader stays silent: it only listens until your phone calls.
+While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 5 to 15 s after your phone stops. To everyone else the reader stays silent: it only listens until your phone calls.
 
 X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID should work. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same. Linking Bluetooth in costs about 187 KB of flash and about 24 KB of internal RAM, even with find mode off.
 
@@ -40,7 +40,7 @@ Copy the code to your phone: Android's Quick Settings QR scanner copies it to th
 
 ### 4. Check it with Test mode
 
-Tap **Test mode**. The reader restarts and listens for up to a minute; switch the advertiser on. When the reader hears your phone it shows the signal and broadcasts `CP-FIND`, which appears in nRF Connect's **Scanner** (type `CP-FIND` in its filter). Switch the advertiser off, and about 15 s later the reader goes back to Settings with the result on the Test mode row.
+Tap **Test mode**. The reader restarts and listens for up to a minute; switch the advertiser on. When the reader hears your phone it shows the signal and broadcasts `CP-FIND`, which appears in nRF Connect's **Scanner** (type `CP-FIND` in its filter). Switch the advertiser off, and 5 to 15 s later the reader goes back to Settings with the result on the Test mode row.
 
 <table><tr>
 <td><img src="docs/images/ble-find-mode/07-test-listening.jpg" width="220" alt="Reader screen: Listening for your phone"></td>
