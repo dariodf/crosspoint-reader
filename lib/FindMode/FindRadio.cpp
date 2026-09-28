@@ -143,9 +143,9 @@ RadioResult broadcastFound(const Code& code, const uint32_t maxBroadcastMs, cons
                            const PowerButtonCheck powerButtonPressed) {
   if (!startRadio()) return RadioResult::RadioFailed;
 
-  // Broadcast from the random address NimBLE creates at every start, not the
-  // chip's permanent one: someone logging Bluetooth nearby cannot recognise the
-  // same reader from one found session to the next. The phone finds it by name.
+  // Broadcast from the fresh random address NimBLE creates at every start: to
+  // someone logging Bluetooth nearby, each found session looks like a different
+  // device. The phone finds it by name.
   NimBLEDevice::setOwnAddrType(BLE_OWN_ADDR_RANDOM);
   NimBLEDevice::setPower(FOUND_TX_POWER_DBM);
 
@@ -163,8 +163,8 @@ RadioResult broadcastFound(const Code& code, const uint32_t maxBroadcastMs, cons
   advertising->setMaxInterval(FOUND_ADVERTISING_INTERVAL);
   if (!advertising->start()) return RadioResult::RadioFailed;
 
-  // Keep listening while broadcasting. The duplicate filter is off: every
-  // packet from the phone counts as "still here", not just its first one.
+  // Keep listening while broadcasting. The duplicate filter is off, so every
+  // packet from the phone counts as "still here".
   listener.listenFor(code);
   NimBLEScan* scan = NimBLEDevice::getScan();
   scan->setScanCallbacks(&listener, /*wantDuplicates=*/true);

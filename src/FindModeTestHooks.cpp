@@ -29,7 +29,8 @@ RTC_NOINIT_ATTR PendingInjection pendingInjection;
 
 // FIND_AWAKE is printed this often while the fast path runs. Its early log
 // lines print before a computer has reopened the USB port; a found-mode
-// broadcast lasts a minute, so the heartbeat always gets through.
+// broadcast lasts at least PHONE_GONE_MS (15 s), so the heartbeat always
+// gets through.
 static constexpr uint32_t HEARTBEAT_MS = 2000;
 uint32_t lastHeartbeatAt = 0;
 

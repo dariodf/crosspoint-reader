@@ -3,7 +3,7 @@
 // Find mode: the secret code and how to spot it in a BLE advertisement.
 //
 // Find mode lets the owner locate a lost reader with a phone. While the reader
-// sleeps it wakes every few minutes, listens for about a second, and sleeps
+// sleeps it wakes every few minutes, listens for half a second, and sleeps
 // again. The phone (nRF Connect's Advertiser) broadcasts a secret 128-bit
 // "service UUID" that only this reader knows. When the reader hears it, it
 // starts advertising "CP-FIND" quickly so the owner can follow the signal

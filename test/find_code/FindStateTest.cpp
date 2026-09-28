@@ -193,7 +193,7 @@ TEST(FindStateScan, HearingTheCodeBroadcastsFound) {
   EXPECT_EQ(action, AfterScanAction::BroadcastFound);
 }
 
-TEST(FindStateScan, SilenceSleeps) {
+TEST(FindStateScan, AQuietScanSleeps) {
   FindState state = aValidState();
 
   const AfterScanAction action = find_mode::decideAfterScan(state, /*heardCode=*/false);

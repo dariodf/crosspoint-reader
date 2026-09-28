@@ -1,12 +1,12 @@
 # Testing find mode
 
 Find mode lets the owner of a lost X4 Pro find it with a phone. While asleep,
-the reader wakes every few minutes, listens for half a second for a secret
+the reader wakes every 1 to 5 minutes (2 by default), listens for half a second for a secret
 code the phone broadcasts, and when it hears it, shows "Find mode activated.
 Press power to close." and broadcasts `CP-FIND` so a phone scanner can follow
 the signal strength to it. The broadcast keeps going while the phone keeps
-calling (up to 10 minutes) and stops about 15 s after the phone stops. The code lives in
-`lib/FindMode/`, `src/FindModeRuntime.*` and
+calling (up to 10 minutes) and stops 15 s after the last packet it heard
+from the phone. The code lives in `lib/FindMode/`, `src/FindModeRuntime.*` and
 `src/activities/settings/FindModeCodeActivity.*`.
 
 This page explains how it was checked and how to check it again. Almost all
@@ -21,9 +21,9 @@ of it runs with nobody touching the device.
 | Reader | The panel, touch screens, battery gauge, a real phone, real battery drain | By hand | Yes |
 
 The dev board runs the unchanged `x4pro` firmware: the X4 Pro is built for the
-same board definition (`esp32-s3-devkitc1-n16r8`). Without a panel or SD card
-the firmware still reaches its "SD card error" screen, and the find-mode fast
-path runs before either is touched, so it behaves as on the reader.
+same board definition (`esp32-s3-devkitc1-n16r8`). On the bare board the
+firmware reaches its "SD card error" screen, and the find-mode fast path runs
+before it touches either, so it behaves as on the reader.
 
 ## The test build
 
@@ -66,6 +66,10 @@ build_flags =
   -DCROSSPOINT_FIND_MODE_TEST_HOOKS=1
 ```
 
+`-DCROSSPOINT_FIND_MODE_TEST_BROADCAST_SECONDS=10` also caps the found
+broadcast (10 minutes by default), so `collect_detections.py` cycles every
+~70 s.
+
 ```csv
 # partitions.local.csv: one app slot, same size as upstream's
 nvs,      data, nvs,     0x9000,  0x5000,
@@ -73,7 +77,16 @@ otadata,  data, ota,     0xe000,  0x2000,
 app0,     app,  ota_0,   0x10000, 0x640000,
 ```
 
-Flash it with `pio run -e x4pro-devkit -t upload`.
+Flash it with `pio run -e x4pro-devkit -t upload` while the board is awake.
+A sleeping board has its USB port off: start `emit.py` so it wakes into found
+mode and keeps the port up, then write the build directly:
+
+```sh
+esptool --port /dev/cu.usbmodem1101 write-flash 0xe000 boot_app0.bin 0x10000 .pio/build/x4pro-devkit/firmware.bin
+```
+
+`boot_app0.bin` ships with the Arduino core, in
+`framework-arduinoespressif32/tools/partitions/`.
 
 ## Running the suite
 
@@ -95,7 +108,7 @@ below), `--skip-button` leaves out the last one.
 | `found_screens` | The found screen in English and Spanish, in all four orientations, saved as PNG |
 | `quiet_and_heard` | Two quiet wakes finish within 900 ms of boot; timer wakes 60 ± 4 s apart; the code is heard within 900 ms; the screen is drawn once |
 | `press_and_mute` | A press in found mode boots normally and mutes; a muted wake hears the code and stays silent; a quiet wake re-arms |
-| `phone_gone_and_address` | The broadcast keeps going while the phone calls (past 70 s); it ends 15 s after the last packet the device heard, by the device's own count (so macOS advertising on after `emit.py` stops leaves it unchanged); every found session uses a new address |
+| `phone_gone_and_address` | The broadcast keeps going while the phone calls (past 70 s); it ends 15 s ± 200 ms after the last packet the device heard (`BroadcastQuiet` in the journal, counted on the device); every found session uses a new address |
 | `radio_failure_keeps_mute` | A radio that fails to start leaves the mute in place |
 | `crashes_switch_off` | Each injected crash is counted; three switch the mode off; `FIND_RETRY` re-arms |
 | `hang_guard` | A hang inside the fast path is aborted within 7 s and counted as a crash |
@@ -110,14 +123,15 @@ Dev board, ESP32-S3-DevKitC-1 (WROOM-1 N8R8), `x4pro-devkit` build,
 again) and run 6 (screens after the wrapping fix): every check passed in at
 least one clean run. Run 4's four failures were a suite bug fixed before run 5
 (the sleep step while a broadcast was running) and an accidental power press
-during the crash scenario.
+during the crash scenario. Run 9 (2026-09-28) repeated `phone_gone_and_address`
+with the device-side count: 8 of 8.
 
 | Check | Measured |
 | --- | --- |
 | Quiet wake, listening done | 823-837 ms after boot (limit 900) |
 | Code heard | 382-506 ms after boot (limit 900) |
 | Timer wakes, 60 s interval | 60.9 s apart |
-| Broadcast length | while the phone calls, up to 10 minutes; ends ~15 s after the phone stops (Pixel, nRF Connect: graph continuous, CP-FIND gone ~15 s after the phone was switched off) |
+| Broadcast length | while the phone calls, up to 10 minutes; ends 15000 ms after the last packet by the device's count (run 9); with a Pixel and nRF Connect the graph stays continuous and CP-FIND goes ~15 s after the phone's advertiser is switched off |
 | Addresses | a new one for every found session (4 of 4, 2 of 2) |
 | Mute | heard and silent, then a quiet wake re-arms: listens `[0, 1, 0]` |
 | Radio failure | keeps the mute: listens `[4, 0, 1, 0]` |
@@ -132,7 +146,7 @@ failed (`RadioResult` in `lib/FindMode/FindRadio.h`).
 ## What still needs a person
 
 - **The panel.** The dev board has no display: the suite checks the drawn
-  framebuffer, not how the e-ink panel shows it.
+  framebuffer, and the panel's look is checked on the reader.
 - **Touch screens.** The Find mode code screen and the settings rows run only
   on the reader.
 - **The battery gauge.** A dev board has none; the fast path treats an
@@ -141,7 +155,7 @@ failed (`RadioResult` in `lib/FindMode/FindRadio.h`).
 - **A real phone.** The computer's advertisement matches what nRF Connect
   sends on a phone (verified once with a Pixel: `02011A 1107 <UUID,
   byte-reversed>`), but phones differ.
-- **Battery drain.** Not measured. The journal's awake times and the wake
-  counters are the stand-in until someone measures current.
-- **A power-button wake from deep sleep.** A sleeping chip cannot receive a
-  serial command, so the suite asks for one press at the end.
+- **Battery drain.** Needs a current meter. Until then the journal's awake
+  times and the wake counters stand in.
+- **A power-button wake from deep sleep.** A sleeping chip's USB port is
+  off, so the suite asks for one press at the end.

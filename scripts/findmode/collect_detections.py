@@ -21,10 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from run_suite import EV_LISTEN_END, HEARD, NOTHING_HEARD, Device  # noqa: E402
-
-EV_LISTEN_START = 9
-EV_HEARD_RSSI = 10
+from run_suite import EV_HEARD_RSSI, EV_LISTEN_END, EV_LISTEN_START, HEARD, NOTHING_HEARD, Device  # noqa: E402
 
 
 def wakes_in(journal):

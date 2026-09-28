@@ -6,7 +6,7 @@
 // wake has to stay short: mounting the SD card to read settings.json would cost
 // time and battery on every wake. So just before sleeping, the firmware copies
 // the settings it needs into a FindState kept in RTC memory, the small slice of
-// RAM that survives deep sleep (not a battery-empty power loss). On a timer
+// RAM that survives deep sleep (until the battery empties). On a timer
 // wake the "fast path" reads only this struct.
 //
 // The flow on each timer wake:
@@ -52,7 +52,7 @@ struct FindState {
   uint8_t inFastPath;       // raised on entry, cleared on a clean exit
   uint8_t switchedOffByCrashes;
   uint8_t mutedUntilCodeGone;  // set by the power button in found mode
-  uint8_t language;            // UI language for the found screen (settings.json is not read on a timer wake)
+  uint8_t language;            // UI language for the found screen (a timer wake skips settings.json)
   uint8_t foundScreenShown;    // the found screen is on the panel; cleared when the sleep screen replaces it
   uint8_t orientation;         // CrossPointSettings orientation the found screen is drawn in
   uint8_t reserved[2];

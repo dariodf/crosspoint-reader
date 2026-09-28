@@ -43,9 +43,9 @@ uint32_t listenStartedAtMs();
 // Signal strength (dBm) of the packet that carried the code in the last
 // listenForCode(); 0 when the code was not heard.
 int8_t heardRssi();
-// How long the phone had been silent when the last broadcastFound() ended.
+// How long the phone had been quiet when the last broadcastFound() ended.
 uint32_t broadcastQuietMs();
-// Broadcasts until the phone has been silent for phoneGoneMs, the power button
+// Broadcasts until the phone has been quiet for phoneGoneMs, the power button
 // is pressed, or maxBroadcastMs pass.
 RadioResult broadcastFound(const Code& code, uint32_t maxBroadcastMs, uint32_t phoneGoneMs,
                            PowerButtonCheck powerButtonPressed);

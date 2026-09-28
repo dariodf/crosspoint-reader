@@ -33,8 +33,8 @@ REPO = os.path.dirname(os.path.dirname(HERE))
 PROBE_CODE = "c0de0001-f1d0-4b1e-9a5e-000000000001"
 
 # JournalEvent and RadioResult values, as in lib/FindMode/FindJournal.h and FindRadio.h.
-EV_BOOT, EV_BATTERY, EV_LISTEN_END, EV_FOUND_SCREEN, EV_BROADCAST_END, EV_HANDOVER, EV_SLEEP, EV_INJECT = range(1, 9)
-EV_BROADCAST_QUIET = 11
+(EV_BOOT, EV_BATTERY, EV_LISTEN_END, EV_FOUND_SCREEN, EV_BROADCAST_END, EV_HANDOVER, EV_SLEEP, EV_INJECT,
+ EV_LISTEN_START, EV_HEARD_RSSI, EV_BROADCAST_QUIET) = range(1, 12)
 HEARD, NOTHING_HEARD, TIME_UP, BUTTON_PRESSED, RADIO_FAILED, PHONE_GONE = range(6)
 ESP_RST_PANIC = 4
 ESP_RST_DEEPSLEEP = 8
@@ -46,8 +46,9 @@ INTERVAL_S = 60
 INTERVAL_TOLERANCE_S = 4
 # Found mode stops this long after the phone goes quiet (PHONE_GONE_MS).
 PHONE_GONE_S = 15
-# Measured on the device, from the phone's last packet to the broadcast's end,
-# so macOS advertising for ~10 s after emit.py stops leaves it unchanged.
+# BroadcastQuiet: the device's own count from the phone's last packet to the
+# broadcast's end. The computer advertising on after emit.py stops leaves it
+# untouched.
 PHONE_GONE_TOLERANCE_MS = 200
 HANG_GUARD_MAX_S = 7
 
@@ -342,11 +343,12 @@ class Suite:
         each search has a new address."""
         # A quiet wake first, so a mute left by an earlier press is cleared.
         self.stop_emitter()
+        self.check("journal cleared", self.clear_journal(), "FIND_JOURNAL_CLEARED")
         self.check("sleep for the phone-gone run", self.sleep_device(), "FIND_SLEEP_OK")
         time.sleep(INTERVAL_S + 10)
         self.start_emitter()
         self.check("found session starts", self.wait_for_found_mode(INTERVAL_S + 20), "Code heard")
-        time.sleep(INTERVAL_S + 10)  # past the old fixed 60 s broadcast
+        time.sleep(INTERVAL_S + 10)  # over a minute of broadcasting, with the phone still calling
         still_up = self.device.wait_for(r"^FIND_AWAKE ", 5, since=time.time()) is not None
         self.check("broadcast continues while the phone calls", still_up, "heartbeat after 70 s")
         stopped_at = time.time()

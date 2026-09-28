@@ -31,8 +31,8 @@ async def advertise(code: str, seconds: int) -> None:
     )
     await server.start(prioritize_local_name=False)
     print(f"advertising {code} for {seconds} s", flush=True)
-    # Stop advertising at once on SIGTERM or Ctrl-C: a process that just dies
-    # leaves macOS advertising for several more seconds, which skews timing tests.
+    # Stop cleanly on SIGTERM or Ctrl-C so bless releases CoreBluetooth. macOS
+    # still advertises for about 10 s after the stop.
     stop = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGTERM, signal.SIGINT):

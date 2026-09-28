@@ -38,7 +38,7 @@ bool packetMatches(const std::vector<uint8_t>& packet, const Code& code) {
   return find_mode::matchesCode(packet.data(), packet.size(), code);
 }
 
-TEST(FindCodeParse, ReadsTheProbeCode) {
+TEST(FindCodeParse, ReadsTheTestCode) {
   Code code{};
 
   const bool parsed = find_mode::parseCode(PROBE_CODE_TEXT, code);
@@ -78,7 +78,7 @@ TEST(FindCodeParse, RejectsShortText) {
   EXPECT_FALSE(parsed);
 }
 
-TEST(FindCodeFormat, WritesTheProbeCodeBack) {
+TEST(FindCodeFormat, WritesTheTestCodeBack) {
   char text[find_mode::CODE_TEXT_BUFFER];
 
   find_mode::formatCode(probeCode(), text);
@@ -86,7 +86,7 @@ TEST(FindCodeFormat, WritesTheProbeCodeBack) {
   EXPECT_EQ(std::string_view(text), PROBE_CODE_TEXT);
 }
 
-TEST(FindCodeMatch, ACapturedPacketCarriesTheProbeCode) {
+TEST(FindCodeMatch, ACapturedPacketCarriesTheTestCode) {
   const auto packet = bytesFromHex(CAPTURED_PACKET);
 
   const bool matched = packetMatches(packet, probeCode());
@@ -94,7 +94,7 @@ TEST(FindCodeMatch, ACapturedPacketCarriesTheProbeCode) {
   EXPECT_TRUE(matched);
 }
 
-TEST(FindCodeMatch, TheProbeCodeInTextOrderIsNotAMatch) {
+TEST(FindCodeMatch, TheTestCodeInTextOrderIsNotAMatch) {
   // Same record, UUID bytes written in text order instead of air order.
   const auto packet = bytesFromHex("02011A1107C0DE0001F1D04B1E9A5E000000000001");
 
