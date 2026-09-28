@@ -330,7 +330,9 @@ void resolvePanelController() {
 // orientation find mode saved at the last sleep.
 // Draws the found screen into the framebuffer. Shared with the FIND_PREVIEW
 // test command, so a screenshot shows exactly what the fast path draws.
-void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
+// The phone test draws its screens the same way, with its own two strings.
+void drawFindModeMessage(const uint8_t language, const uint8_t orientation, const StrId headingId,
+                         const StrId instructionId, const int value) {
   I18N.setLanguage(static_cast<Language>(language));
   ReaderUtils::applyOrientation(renderer, orientation);
   renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
@@ -341,9 +343,10 @@ void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
   static constexpr int MAX_LINES = 3;
   const int width = renderer.getScreenWidth() - 2 * SIDE_MARGIN;
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
-  const auto heading =
-      renderer.wrappedText(UI_12_FONT_ID, tr(STR_FIND_MODE_ACTIVATED), width, MAX_LINES, EpdFontFamily::BOLD);
-  const auto instruction = renderer.wrappedText(UI_12_FONT_ID, tr(STR_FIND_PRESS_POWER_TO_CLOSE), width, MAX_LINES);
+  char headingText[96];
+  snprintf(headingText, sizeof(headingText), I18N.get(headingId), value);
+  const auto heading = renderer.wrappedText(UI_12_FONT_ID, headingText, width, MAX_LINES, EpdFontFamily::BOLD);
+  const auto instruction = renderer.wrappedText(UI_12_FONT_ID, I18N.get(instructionId), width, MAX_LINES);
   const int blockHeight = static_cast<int>(heading.size() + instruction.size()) * lineHeight + lineHeight / 2;
   int y = (renderer.getScreenHeight() - blockHeight) / 2;
   for (const std::string& line : heading) {
@@ -358,13 +361,22 @@ void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 }
 
-void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
+void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
+  drawFindModeMessage(language, orientation, StrId::STR_FIND_MODE_ACTIVATED, StrId::STR_FIND_PRESS_POWER_TO_CLOSE, 0);
+}
+
+void showFindModeMessage(const uint8_t language, const uint8_t orientation, const StrId heading,
+                         const StrId instruction, const int value) {
   resolvePanelController();
   display.begin();
   renderer.begin();
-  drawFindModeScreen(language, orientation);
+  drawFindModeMessage(language, orientation, heading, instruction, value);
   renderer.displayBuffer(HalDisplay::FULL_REFRESH);
   display.deepSleep();
+}
+
+void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
+  showFindModeMessage(language, orientation, StrId::STR_FIND_MODE_ACTIVATED, StrId::STR_FIND_PRESS_POWER_TO_CLOSE, 0);
 }
 #endif
 
@@ -455,6 +467,7 @@ void setup() {
     // Returned: the owner pressed power. Finish the input setup skipped above.
     gpio.begin();
   }
+  const bool findModeTestStoppedByPress = findModeRunTest(gpio, showFindModeMessage);
   // Bluetooth runs only in the fast path above, so hand its controller's
   // static memory to the heap for the rest of this boot.
   esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
@@ -533,6 +546,11 @@ void setup() {
       isSilentReboot ? silentRebootLightOn : (SETTINGS.frontlightOn != 0 && SETTINGS.frontlightRestoreOnWake != 0);
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
+#if CROSSPOINT_FIND_MODE
+  // The press that stopped the phone test is still down: its release must not
+  // also run the short-press action.
+  if (findModeTestStoppedByPress) wakePowerReleasePending = true;
+#endif
   switch (wakeupReason) {
     case HalGPIO::WakeupReason::PowerButton:
       // With Short Power Button Press = Sleep, a single click wakes on any
@@ -730,6 +748,9 @@ void loop() {
       else if (cmd == "FIND_SLEEP") {
         logSerial.printf("FIND_SLEEP_OK\n");
         enterDeepSleep();
+      } else if (cmd == "FIND_TEST") {
+        logSerial.printf("FIND_TEST_OK\n");
+        findModeRequestTest();
       } else if (cmd.startsWith("FIND_PREVIEW ")) {
         // FIND_PREVIEW <language> <orientation>: the found screen into the
         // framebuffer, for a following SCREENSHOT.

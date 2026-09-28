@@ -44,6 +44,7 @@ before it touches either, so it behaves as on the reader.
   | `CMD:FIND_STATE` | Print the find-mode state as `key=value` |
   | `CMD:FIND_INJECT crash\|hang\|radiofail\|battery <percent>` | A fault for the next timer wake |
   | `CMD:FIND_RETRY` | Clear a crash switch-off |
+  | `CMD:FIND_TEST` | Start Test mode, like its row on the BLE Find Mode page |
   | `CMD:FIND_PREVIEW <language> <orientation>` | Draw the found screen, for `CMD:SCREENSHOT` |
 
 A dev board has no SD card for `settings.json`, so test builds for it also set
@@ -109,6 +110,7 @@ below), `--skip-button` leaves out the last one.
 | `quiet_and_heard` | Two quiet wakes finish within 900 ms of boot; timer wakes 60 ± 4 s apart; the code is heard within 900 ms; the screen is drawn once |
 | `press_and_mute` | A press in found mode boots normally and mutes; a muted wake hears the code and stays silent; a quiet wake re-arms |
 | `phone_gone_and_address` | The broadcast keeps going while the phone calls (past 70 s); it ends 15 s ± 200 ms after the last packet the device heard (`BroadcastQuiet` in the journal, counted on the device); every found session uses a new address |
+| `test_mode` | Test mode restarts into a listen that hears the phone, echoes `CP-FIND` and boots on once the phone stops; with the phone off it hears nothing for the full minute |
 | `radio_failure_keeps_mute` | A radio that fails to start leaves the mute in place |
 | `crashes_switch_off` | Each injected crash is counted; three switch the mode off; `FIND_RETRY` re-arms |
 | `hang_guard` | A hang inside the fast path is aborted within 7 s and counted as a crash |

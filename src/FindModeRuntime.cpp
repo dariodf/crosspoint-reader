@@ -5,6 +5,7 @@
 #include <Arduino.h>
 #include <FindRadio.h>
 #include <FindState.h>
+#include <FindTest.h>
 #include <HalSystem.h>
 #include <Logging.h>
 #include <WiFi.h>
@@ -17,6 +18,7 @@
 #include "CrossPointSettings.h"
 #include "CrossPointState.h"
 #include "FindModeTestHooks.h"
+#include "SilentRestart.h"
 
 namespace {
 
@@ -44,10 +46,22 @@ static constexpr uint32_t LISTEN_BUDGET_MS = 5000;
 // and one full refresh, a few seconds).
 static constexpr uint32_t BROADCAST_BUDGET_MS = BROADCAST_MS + 10000;
 
+// Test mode listens long enough to reach the phone and switch its
+// advertiser on, and echoes CP-FIND for a shorter cap than a real find.
+static constexpr uint32_t TEST_LISTEN_MS = 60UL * 1000UL;
+static constexpr uint32_t TEST_BROADCAST_MS = 2UL * 60UL * 1000UL;
+// Each budget also covers drawing its screen (display start-up and one full
+// refresh, a few seconds).
+static constexpr uint32_t TEST_LISTEN_BUDGET_MS = TEST_LISTEN_MS + 10000;
+static constexpr uint32_t TEST_BROADCAST_BUDGET_MS = TEST_BROADCAST_MS + 10000;
+
 // RTC_NOINIT keeps the state through deep sleep and through a crash reset, so
 // countFastPathCrash() can see a fast path that died. After power loss it holds
 // random bytes, which the checksum rejects.
 RTC_NOINIT_ATTR find_mode::FindState sleepState;
+// The phone test's request and result: it survives the restart into the test,
+// and the one back into Settings.
+RTC_NOINIT_ATTR find_mode::TestRequest testRequest;
 
 bool settingsLoaded = false;
 
@@ -305,11 +319,6 @@ FindModeStatus findModeStatus() {
   return readSettings().enabled ? FindModeStatus::Listening : FindModeStatus::Off;
 }
 
-FindModeStats findModeStats() {
-  if (!find_mode::isStateValid(sleepState)) return {};
-  return {sleepState.wakes, sleepState.detections, sleepState.awakeMs};
-}
-
 void findModeEnsureCode() {
   find_mode::Code code;
   if (!find_mode::parseCode(SETTINGS.findModeCode, code)) findModeNewCode();
@@ -334,6 +343,65 @@ void findModeNewCode() {
 
 void findModeRetryAfterSwitchOff() {
   if (find_mode::isStateValid(sleepState)) find_mode::retryAfterSwitchOff(sleepState);
+}
+
+void findModeRequestTest() {
+  const FindSettings settings = readSettings();
+  find_mode::requestTest(testRequest, settings.code, SETTINGS.language,
+                         static_cast<uint8_t>(CrossPointSettings::PORTRAIT));
+  SETTINGS.saveToFile();
+  LOG_INF("FIND", "Phone test requested, restarting");
+  silentRestartToSettings();
+}
+
+bool findModeRunTest(HalGPIO& gpio, const FindModeMessageScreen showMessage) {
+  if (!find_mode::takeTestRequest(testRequest)) return false;
+
+  gpioForButtonCheck = &gpio;
+  powerButtonDownBefore = false;
+  armFastPathGuard(TEST_LISTEN_BUDGET_MS);
+  showMessage(testRequest.language, testRequest.orientation, StrId::STR_FIND_TEST_LISTENING,
+              StrId::STR_FIND_TEST_LISTENING_HINT, 0);
+  LOG_INF("FIND", "Phone test: listening");
+  const find_mode::RadioResult listenResult =
+      find_mode::listenForCode(testRequest.code, TEST_LISTEN_MS, powerButtonPressed);
+  bool ownerPressedPower = listenResult == find_mode::RadioResult::ButtonPressed;
+  const int8_t rssi = listenResult == find_mode::RadioResult::HeardCode ? find_mode::heardRssi() : 0;
+
+  if (listenResult == find_mode::RadioResult::HeardCode) {
+    LOG_INF("FIND", "Phone test: heard at %d dBm, broadcasting %s", rssi, find_mode::FOUND_NAME);
+    armFastPathGuard(TEST_BROADCAST_BUDGET_MS);
+    showMessage(testRequest.language, testRequest.orientation, StrId::STR_FIND_TEST_HEARD_FORMAT,
+                StrId::STR_FIND_TEST_HEARD_HINT, rssi);
+    const find_mode::RadioResult broadcastResult =
+        find_mode::broadcastFound(testRequest.code, TEST_BROADCAST_MS, PHONE_GONE_MS, powerButtonPressed);
+    ownerPressedPower = broadcastResult == find_mode::RadioResult::ButtonPressed;
+  }
+
+  find_mode::stopRadio();
+  disarmFastPathGuard();
+  const find_mode::TestPhase phase = find_mode::testOutcome(listenResult);
+  find_mode::finishTest(testRequest, phase, rssi);
+  findTestRecord(find_mode::JournalEvent::TestEnd, static_cast<uint8_t>(phase), testRequest.rssiMagnitude);
+  LOG_INF("FIND", "Phone test finished (phase %u)", static_cast<unsigned>(phase));
+  return ownerPressedPower || gpio.isPowerButtonDown();
+}
+
+FindModeTestResult findModeLastTest(int& rssi) {
+  rssi = -static_cast<int>(testRequest.rssiMagnitude);
+  switch (find_mode::lastTestPhase(testRequest)) {
+    case find_mode::TestPhase::Heard:
+      return FindModeTestResult::Heard;
+    case find_mode::TestPhase::NothingHeard:
+      return FindModeTestResult::NothingHeard;
+    case find_mode::TestPhase::Failed:
+    case find_mode::TestPhase::Running:
+      return FindModeTestResult::Failed;
+    case find_mode::TestPhase::Stopped:
+      return FindModeTestResult::Stopped;
+    default:
+      return FindModeTestResult::None;
+  }
 }
 
 #if CROSSPOINT_FIND_MODE_TEST_HOOKS
