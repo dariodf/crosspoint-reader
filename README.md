@@ -6,7 +6,7 @@
 
 While the reader sleeps, it wakes every few minutes and listens for half a second for a secret code that only your phone knows. When it hears it, it shows "BLE Find Mode activated. Press power to close." and broadcasts `CP-FIND`, so a Bluetooth scanner on your phone can follow the signal strength to it. The broadcast lasts while your phone keeps calling (up to 10 minutes) and stops 5 to 15 s after your phone stops. To everyone else the reader stays silent: it only listens until your phone calls.
 
-X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID should work. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same. Linking Bluetooth in costs about 187 KB of flash and about 24 KB of internal RAM, even with find mode off.
+X4 Pro only for now. The phone side is standard Bluetooth: any app that advertises a 128-bit service UUID should work. These steps use [nRF Connect](https://play.google.com/store/apps/details?id=no.nordicsemi.android.mcp) on Android. On iPhone, an app like [LightBlue](https://apps.apple.com/app/lightblue/id557428110) should do the same. Linking Bluetooth in costs about 187 KB of flash and about 24 KB of internal RAM, even with find mode off. Listening costs an estimated 1 % of the battery a day at the default 2 minutes (unmeasured, from the wake times and typical ESP32-S3 currents), so a lost reader keeps listening for about two months.
 
 ### 1. Install
 
