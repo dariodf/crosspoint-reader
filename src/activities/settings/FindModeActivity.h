@@ -4,8 +4,9 @@
 // mode on, the code's QR follows, so a phone copies it in one scan, and below
 // it a list that touch and buttons both work:
 //
-//   Stopped after crashes  only after the mode switched itself off; select
-//                       to retry
+//   Stopped after crashes
+//                       shows only after the mode switched itself off;
+//                       select to retry
 //   <the code>          select to show the QR full screen
 //   <how-to>            where the code goes in nRF Connect
 //   Test mode           restarts into a one-minute listen, then echoes CP-FIND;

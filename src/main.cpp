@@ -327,10 +327,8 @@ void resolvePanelController() {
 #if CROSSPOINT_FIND_MODE
 // Find mode's found screen, drawn from the timer-wake fast path: before the SD
 // card and settings.json, so it uses a built-in UI font and the language and
-// orientation find mode saved at the last sleep.
-// Draws the found screen into the framebuffer. Shared with the FIND_PREVIEW
-// test command, so a screenshot shows exactly what the fast path draws.
-// The phone test draws its screens the same way, with its own two strings.
+// orientation find mode saved at the last sleep. Test mode draws its screens
+// the same way, with its own two strings.
 void drawFindModeMessage(const uint8_t language, const uint8_t orientation, const StrId headingId,
                          const StrId instructionId, const int value) {
   I18N.setLanguage(static_cast<Language>(language));
@@ -361,6 +359,8 @@ void drawFindModeMessage(const uint8_t language, const uint8_t orientation, cons
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
 }
 
+// Draws the found screen into the framebuffer. Shared with the FIND_PREVIEW
+// test command, so a screenshot shows exactly what the fast path draws.
 void drawFindModeScreen(const uint8_t language, const uint8_t orientation) {
   drawFindModeMessage(language, orientation, StrId::STR_FIND_MODE_ACTIVATED, StrId::STR_FIND_PRESS_POWER_TO_CLOSE, 0);
 }
@@ -547,7 +547,7 @@ void setup() {
   Frontlight.begin(SETTINGS.frontlightBrightness, SETTINGS.frontlightWarmth, restoreLightOn);
 
 #if CROSSPOINT_FIND_MODE
-  // The press that stopped the phone test is still down: its release must not
+  // The press that stopped Test mode is still down: its release must not
   // also run the short-press action.
   if (findModeTestStoppedByPress) wakePowerReleasePending = true;
 #endif

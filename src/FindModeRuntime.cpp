@@ -59,7 +59,7 @@ static constexpr uint32_t TEST_BROADCAST_BUDGET_MS = TEST_BROADCAST_MS + 10000;
 // countFastPathCrash() can see a fast path that died. After power loss it holds
 // random bytes, which the checksum rejects.
 RTC_NOINIT_ATTR find_mode::FindState sleepState;
-// The phone test's request and result: it survives the restart into the test,
+// Test mode's request and result: it survives the restart into the test,
 // and the one back into Settings.
 RTC_NOINIT_ATTR find_mode::TestRequest testRequest;
 
@@ -127,7 +127,7 @@ FindSettings readSettings() {
   settings.minBatteryPercent = CROSSPOINT_FIND_MODE_TEST_MIN_BATTERY;
 #else
   // With no valid code there is nothing a phone could send, so the mode stays
-  // off until the Find mode code screen has created one.
+  // off until the BLE Find Mode page has created one.
   settings.enabled = SETTINGS.findModeEnabled && find_mode::parseCode(SETTINGS.findModeCode, settings.code);
   // Both are clamped to their setting's range when settings.json loads.
   settings.intervalMinutes = SETTINGS.findModeIntervalMinutes;
@@ -350,7 +350,7 @@ void findModeRequestTest() {
   find_mode::requestTest(testRequest, settings.code, SETTINGS.language,
                          static_cast<uint8_t>(CrossPointSettings::PORTRAIT));
   SETTINGS.saveToFile();
-  LOG_INF("FIND", "Phone test requested, restarting");
+  LOG_INF("FIND", "Test mode requested, restarting");
   silentRestartToSettings();
 }
 
@@ -362,14 +362,14 @@ bool findModeRunTest(HalGPIO& gpio, const FindModeMessageScreen showMessage) {
   armFastPathGuard(TEST_LISTEN_BUDGET_MS);
   showMessage(testRequest.language, testRequest.orientation, StrId::STR_FIND_TEST_LISTENING,
               StrId::STR_FIND_TEST_LISTENING_HINT, 0);
-  LOG_INF("FIND", "Phone test: listening");
+  LOG_INF("FIND", "Test mode: listening");
   const find_mode::RadioResult listenResult =
       find_mode::listenForCode(testRequest.code, TEST_LISTEN_MS, powerButtonPressed);
   bool ownerPressedPower = listenResult == find_mode::RadioResult::ButtonPressed;
   const int8_t rssi = listenResult == find_mode::RadioResult::HeardCode ? find_mode::heardRssi() : 0;
 
   if (listenResult == find_mode::RadioResult::HeardCode) {
-    LOG_INF("FIND", "Phone test: heard at %d dBm, broadcasting %s", rssi, find_mode::FOUND_NAME);
+    LOG_INF("FIND", "Test mode: heard at %d dBm, broadcasting %s", rssi, find_mode::FOUND_NAME);
     armFastPathGuard(TEST_BROADCAST_BUDGET_MS);
     showMessage(testRequest.language, testRequest.orientation, StrId::STR_FIND_TEST_HEARD_FORMAT,
                 StrId::STR_FIND_TEST_HEARD_HINT, rssi);
@@ -383,7 +383,7 @@ bool findModeRunTest(HalGPIO& gpio, const FindModeMessageScreen showMessage) {
   const find_mode::TestPhase phase = find_mode::testOutcome(listenResult);
   find_mode::finishTest(testRequest, phase, rssi);
   findTestRecord(find_mode::JournalEvent::TestEnd, static_cast<uint8_t>(phase), testRequest.rssiMagnitude);
-  LOG_INF("FIND", "Phone test finished (phase %u)", static_cast<unsigned>(phase));
+  LOG_INF("FIND", "Test mode finished (phase %u)", static_cast<unsigned>(phase));
   return ownerPressedPower || gpio.isPowerButtonDown();
 }
 

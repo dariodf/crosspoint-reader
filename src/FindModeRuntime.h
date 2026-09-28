@@ -9,7 +9,7 @@
 //                     RTC memory and arms the wake timer.
 //   BLE Find Mode page: findModeStatus(),
 //                     findModeEnsureCode(), findModeNewCode(),
-//                     findModeRetryAfterSwitchOff(), and the phone test:
+//                     findModeRetryAfterSwitchOff(), and Test mode:
 //                     findModeRequestTest(), then findModeLastTest().
 //   setup(), before Bluetooth's memory goes to the heap: findModeRunTest().
 //
@@ -28,7 +28,7 @@
 // fast path it sleeps until the power button instead of returning.
 void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager);
 
-// Draws the found screen ("Find mode activated. Press power to close.") in the given
+// Draws the found screen ("BLE Find Mode activated. Press power to close.") in the given
 // UI language and CrossPointSettings orientation, and puts the display back to
 // sleep. Supplied by main.cpp, which owns the display and fonts.
 using FindModeFoundScreen = void (*)(uint8_t language, uint8_t orientation);

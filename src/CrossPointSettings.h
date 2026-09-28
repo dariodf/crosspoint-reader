@@ -294,9 +294,9 @@ class CrossPointSettings : public PersistableStore<CrossPointSettings> {
   uint8_t paragraphAlignment = JUSTIFIED;
   // Auto-sleep timeout setting (default 10 minutes). Legacy sleepTimeout enum values are migration-only.
   uint8_t sleepTimeoutMinutes = 10;
-  // Find mode (X4 Pro builds with CROSSPOINT_FIND_MODE): listen for the owner's
-  // phone while asleep. The code is UUID text, created the first time the Find
-  // mode code screen opens.
+  // BLE Find Mode (X4 Pro builds with CROSSPOINT_FIND_MODE): listen for the
+  // owner's phone while asleep. The code is UUID text, created the first time
+  // the BLE Find Mode page opens.
   static constexpr uint8_t FIND_INTERVAL_MIN_MINUTES = 1;
   static constexpr uint8_t FIND_INTERVAL_MAX_MINUTES = 5;
   static constexpr uint8_t FIND_MIN_BATTERY_LOWEST_PERCENT = 10;
