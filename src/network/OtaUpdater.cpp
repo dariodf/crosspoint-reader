@@ -15,6 +15,7 @@
 #include <cstring>
 #include <string>
 
+#include "FindVersion.h"
 #include "FirmwareBoardTag.h"
 #include "FirmwareFlasher.h"
 
@@ -118,6 +119,11 @@ bool OtaUpdater::isUpdateNewer() const {
    * Check patch versions.
    */
   if (latestPatch != currentPatch) return latestPatch > currentPatch;
+
+  // Same upstream version: a later find mode build of it is newer.
+  const int latestBuild = find_mode::buildNumber(latestVersion.c_str());
+  const int currentBuild = find_mode::buildNumber(currentVersion);
+  if (latestBuild != currentBuild) return latestBuild > currentBuild;
 
   // If we reach here, it means all segments are equal.
   // One final check, if we're on an RC build (contains "-rc"), we should consider the latest version as newer even if
