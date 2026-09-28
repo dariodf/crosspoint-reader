@@ -2,6 +2,10 @@ name: Compile Release
 
 # Build and attach firmware only after a release is published. The release tag
 # supplies both the source revision and the version in each asset name.
+#
+# Find mode builds only for the X4 Pro. Each release carries SHA256SUMS and a
+# build provenance attestation; check a download with
+#   gh attestation verify crosspoint-<version>-x4pro.bin --repo dariodf/crosspoint-reader
 
 on:
   release:
@@ -17,21 +21,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - release_env: gh_release
-            rc_env: gh_release_rc
-            device: x3-x4
-          - release_env: sticky-gh_release
-            rc_env: sticky-gh_release_rc
-            device: sticky
           - release_env: x4pro-gh_release
             rc_env: x4pro-gh_release_rc
             device: x4pro
-          - release_env: x4c-gh_release
-            rc_env: x4c-gh_release_rc
-            device: x4c
-          - release_env: papermono-gh_release
-            rc_env: papermono-gh_release_rc
-            device: papermono
     steps:
       - uses: actions/checkout@v6
         with:
@@ -113,6 +105,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Download firmware assets
         uses: actions/download-artifact@v4
@@ -121,15 +115,19 @@ jobs:
           pattern: crosspoint-*.bin
           merge-multiple: true
 
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/crosspoint-*.bin
+
       - name: Attach firmware assets
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
-          for device in x3-x4 sticky x4pro x4c papermono; do
-            test -f "dist/crosspoint-${version}-${device}.bin"
-          done
-          test "$(find dist -maxdepth 1 -type f -name 'crosspoint-*.bin' | wc -l)" -eq 5
-          gh release upload "$RELEASE_TAG" dist/crosspoint-*.bin \
+          test -f "dist/crosspoint-${version}-x4pro.bin"
+          test "$(find dist -maxdepth 1 -type f -name 'crosspoint-*.bin' | wc -l)" -eq 1
+          (cd dist && sha256sum crosspoint-*.bin > SHA256SUMS)
+          gh release upload "$RELEASE_TAG" dist/crosspoint-*.bin dist/SHA256SUMS \
             --repo "$GITHUB_REPOSITORY" --clobber

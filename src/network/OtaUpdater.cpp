@@ -19,7 +19,8 @@
 #include "FirmwareFlasher.h"
 
 namespace {
-constexpr char latestReleaseUrl[] = "https://api.github.com/repos/crosspoint-reader/crosspoint-reader/releases/latest";
+// Find mode builds update from the fork that publishes them.
+constexpr char latestReleaseUrl[] = "https://api.github.com/repos/dariodf/crosspoint-reader/releases/latest";
 }  // namespace
 
 OtaUpdater::OtaUpdaterError OtaUpdater::checkForUpdate() {
