@@ -150,8 +150,8 @@ void FindModeActivity::buildScreen(UiScreen& screen) {
   }
 
   qrTop = screen.body().y;
-  qrSide = std::min(renderer.getScreenWidth() - 2 * QR_SIDE_MARGIN,
-                    renderer.getScreenHeight() * QR_HEIGHT_PERCENT / 100);
+  qrSide =
+      std::min(renderer.getScreenWidth() - 2 * QR_SIDE_MARGIN, renderer.getScreenHeight() * QR_HEIGHT_PERCENT / 100);
   screen.spacer(static_cast<int16_t>(qrSide + metrics.verticalSpacing));
 
   switch (findModeStatus()) {
