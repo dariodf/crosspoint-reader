@@ -133,7 +133,7 @@ with the device-side count: 8 of 8.
 | Quiet wake, listening done | 823-837 ms after boot (limit 900) |
 | Code heard | 382-506 ms after boot (limit 900) |
 | Timer wakes, 60 s interval | 60.9 s apart |
-| Broadcast length | while the phone calls, up to 10 minutes; ends 15000 ms after the last packet by the device's count (run 9); with a Pixel and nRF Connect the graph stays continuous and CP-FIND goes ~15 s after the phone's advertiser is switched off |
+| Broadcast length | while the phone calls, up to 10 minutes; ends 15000 ms after the last packet by the device's count (run 9); with a Pixel and nRF Connect the graph stays continuous and CP-FIND goes 5 to 15 s after the phone's advertiser is switched off (by eye) |
 | Addresses | a new one for every found session (4 of 4, 2 of 2) |
 | Mute | heard and silent, then a quiet wake re-arms: listens `[0, 1, 0]` |
 | Radio failure | keeps the mute: listens `[4, 0, 1, 0]` |
