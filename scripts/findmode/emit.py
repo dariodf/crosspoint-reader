@@ -13,6 +13,7 @@ Verified with a phone scanner (nRF Connect): 02011A 1107 <UUID, byte-reversed>.
 
 import argparse
 import asyncio
+import signal
 
 from bless import BlessServer, GATTAttributePermissions, GATTCharacteristicProperties
 
@@ -30,7 +31,16 @@ async def advertise(code: str, seconds: int) -> None:
     )
     await server.start(prioritize_local_name=False)
     print(f"advertising {code} for {seconds} s", flush=True)
-    await asyncio.sleep(seconds)
+    # Stop advertising at once on SIGTERM or Ctrl-C: a process that just dies
+    # leaves macOS advertising for several more seconds, which skews timing tests.
+    stop = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, stop.set)
+    try:
+        await asyncio.wait_for(stop.wait(), timeout=seconds)
+    except asyncio.TimeoutError:
+        pass
     await server.stop()
     print("stopped", flush=True)
 

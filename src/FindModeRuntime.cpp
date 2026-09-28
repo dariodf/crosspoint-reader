@@ -24,15 +24,18 @@ namespace {
 // fastest advertising interval (~100 ms) this hears it about five times; the
 // listen ends as soon as it does, so the full time is spent only on quiet wakes.
 static constexpr uint32_t LISTEN_MS = 500;
-// How long found mode broadcasts CP-FIND before sleeping again. Short, to save
-// battery: while the phone keeps advertising, the next wake hears it again
-// and starts another broadcast.
+// Found mode broadcasts CP-FIND while the owner's phone keeps calling, so the
+// signal graph on the phone has no gaps, and stops PHONE_GONE_MS after the
+// owner turns the search off. The cap bounds a search left running.
 #ifdef CROSSPOINT_FIND_MODE_TEST_BROADCAST_SECONDS
-// Test builds that collect detection timings cycle faster with a short broadcast.
+// Test builds that collect detection timings cycle faster with a short cap.
 static constexpr uint32_t BROADCAST_MS = CROSSPOINT_FIND_MODE_TEST_BROADCAST_SECONDS * 1000UL;
 #else
-static constexpr uint32_t BROADCAST_MS = 60UL * 1000UL;
+static constexpr uint32_t BROADCAST_MS = 10UL * 60UL * 1000UL;
 #endif
+// A phone at the edge of range loses packets now and then; this long without
+// one means the search was turned off (or the owner walked out of range).
+static constexpr uint32_t PHONE_GONE_MS = 15UL * 1000UL;
 
 // Time budgets for the fast-path guard below. Listening covers NimBLE start-up
 // (normally ~0.3 s), the listen itself and the teardown.
@@ -226,7 +229,8 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
           findTestRecord(find_mode::JournalEvent::FoundScreen, 0, millis());
         }
         const uint32_t broadcastStartedAt = millis();
-        const find_mode::RadioResult broadcastResult = find_mode::broadcastFound(BROADCAST_MS, powerButtonPressed);
+        const find_mode::RadioResult broadcastResult =
+            find_mode::broadcastFound(sleepState.code, BROADCAST_MS, PHONE_GONE_MS, powerButtonPressed);
         findTestRecord(find_mode::JournalEvent::BroadcastEnd, static_cast<uint8_t>(broadcastResult),
                        millis() - broadcastStartedAt);
         if (broadcastResult == find_mode::RadioResult::ButtonPressed) {

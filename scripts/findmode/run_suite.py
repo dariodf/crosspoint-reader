@@ -34,7 +34,7 @@ PROBE_CODE = "c0de0001-f1d0-4b1e-9a5e-000000000001"
 
 # JournalEvent and RadioResult values, as in lib/FindMode/FindJournal.h and FindRadio.h.
 EV_BOOT, EV_BATTERY, EV_LISTEN_END, EV_FOUND_SCREEN, EV_BROADCAST_END, EV_HANDOVER, EV_SLEEP, EV_INJECT = range(1, 9)
-HEARD, NOTHING_HEARD, TIME_UP, BUTTON_PRESSED, RADIO_FAILED = range(5)
+HEARD, NOTHING_HEARD, TIME_UP, BUTTON_PRESSED, RADIO_FAILED, PHONE_GONE = range(6)
 ESP_RST_PANIC = 4
 ESP_RST_DEEPSLEEP = 8
 
@@ -43,8 +43,12 @@ QUIET_WAKE_MAX_MS = 900
 HEARD_WAKE_MAX_MS = 900
 INTERVAL_S = 60
 INTERVAL_TOLERANCE_S = 4
-BROADCAST_MS = 60_000
-BROADCAST_TOLERANCE_MS = 1_500
+# Found mode stops this long after the phone goes quiet (PHONE_GONE_MS).
+PHONE_GONE_S = 15
+PHONE_GONE_TOLERANCE_S = 4
+# macOS keeps advertising about 10 s after emit.py stops (measured 25.2 s twice
+# end to end, against ~15 s with a phone), so the suite allows for it.
+MAC_ADVERTISING_LINGER_S = 10
 HANG_GUARD_MAX_S = 7
 
 
@@ -217,8 +221,17 @@ class Suite:
             stdout=open(self.watcher_log, "w"), stderr=subprocess.STDOUT)
 
     def found_addresses(self):
+        """One address per found session, in order. macOS sometimes pauses
+        reporting a device mid-broadcast, so monitor.py can log a second "FOUND
+        started" for the same session: repeats of the previous address merge."""
+        sessions = []
         with open(self.watcher_log) as f:
-            return [line.split()[-1] for line in f if "FOUND started" in line]
+            for line in f:
+                if "FOUND started" in line:
+                    address = line.split()[-1]
+                    if not sessions or sessions[-1] != address:
+                        sessions.append(address)
+        return sessions
 
     # --- device steps ----------------------------------------------------------------
 
@@ -324,27 +337,31 @@ class Suite:
                    f"listen results {results}, {len(broadcasts)} broadcasts before the re-armed one")
         self.check("quiet wake re-arms", NOTHING_HEARD in results, f"listen results {results}")
 
-    def scenario_timeout_and_address(self):
-        """The broadcast ends by itself after a minute; each session has a new address."""
+    def scenario_phone_gone_and_address(self):
+        """Found mode lasts while the phone calls and stops soon after it goes quiet;
+        each search has a new address."""
         # A quiet wake first, so a mute left by an earlier press is cleared.
         self.stop_emitter()
-        self.check("sleep for the timeout run", self.sleep_device(), "FIND_SLEEP_OK")
+        self.check("sleep for the phone-gone run", self.sleep_device(), "FIND_SLEEP_OK")
         time.sleep(INTERVAL_S + 10)
         self.start_emitter()
-        self.check("found session to time out", self.wait_for_found_mode(INTERVAL_S + 20), "Code heard")
+        self.check("found session starts", self.wait_for_found_mode(INTERVAL_S + 20), "Code heard")
+        time.sleep(INTERVAL_S + 10)  # past the old fixed 60 s broadcast
+        still_up = self.device.wait_for(r"^FIND_AWAKE ", 5, since=time.time()) is not None
+        self.check("broadcast continues while the phone calls", still_up, "heartbeat after 70 s")
         stopped_at = time.time()
         self.stop_emitter()
-        self.device.wait_for(r"Radio stopped", BROADCAST_MS / 1000 + 10, since=stopped_at)
+        ended = self.device.wait_for(r"Radio stopped", PHONE_GONE_S + 30, since=stopped_at)
+        waited = time.time() - stopped_at
+        expected = PHONE_GONE_S + MAC_ADVERTISING_LINGER_S
+        self.check(f"broadcast ends {expected} +/- {PHONE_GONE_TOLERANCE_S} s after emit.py stops",
+                   ended is not None and abs(waited - expected) <= PHONE_GONE_TOLERANCE_S, f"{waited:.1f} s")
         time.sleep(3)
         self.start_emitter()
         self.check("next session starts", self.wait_for_found_mode(INTERVAL_S + 20), "Code heard")
         journal = self.device.journal() or []
-        ends = [e for e in journal if e[1] == EV_BROADCAST_END and e[2] == TIME_UP]
-        if ends:
-            self.check(f"broadcast lasts {BROADCAST_MS} ms", abs(ends[-1][3] - BROADCAST_MS) <= BROADCAST_TOLERANCE_MS,
-                       f"{ends[-1][3]} ms")
-        else:
-            self.check("broadcast timed out", False, "no TimeUp broadcast in the journal")
+        gone = [e for e in journal if e[1] == EV_BROADCAST_END and e[2] == PHONE_GONE]
+        self.check("broadcast ended as PhoneGone", bool(gone), f"{len(gone)} PhoneGone ends")
         # The watcher needs a moment to see the session that just started.
         addresses = self.found_addresses()
         for _ in range(20):
@@ -468,7 +485,7 @@ class Suite:
             self.scenario_found_screens,
             self.scenario_quiet_and_heard,
             self.scenario_press_and_mute,
-            self.scenario_timeout_and_address,
+            self.scenario_phone_gone_and_address,
             self.scenario_radio_failure_keeps_mute,
             self.scenario_crashes_switch_off,
             self.scenario_hang_guard,

@@ -138,7 +138,8 @@ RadioResult listenForCode(const Code& code, const uint32_t listenMs, const Power
   return result;
 }
 
-RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck powerButtonPressed) {
+RadioResult broadcastFound(const Code& code, const uint32_t maxBroadcastMs, const uint32_t phoneGoneMs,
+                           const PowerButtonCheck powerButtonPressed) {
   if (!startRadio()) return RadioResult::RadioFailed;
 
   // Broadcast from the random address NimBLE creates at every start, not the
@@ -161,7 +162,42 @@ RadioResult broadcastFound(const uint32_t broadcastMs, const PowerButtonCheck po
   advertising->setMaxInterval(FOUND_ADVERTISING_INTERVAL);
   if (!advertising->start()) return RadioResult::RadioFailed;
 
-  const RadioResult result = pollFor(broadcastMs, powerButtonPressed, nullptr, advertisingRunning, RadioResult::TimeUp);
+  // Keep listening while broadcasting. The duplicate filter is off: every
+  // packet from the phone counts as "still here", not just its first one.
+  listener.listenFor(code);
+  NimBLEScan* scan = NimBLEDevice::getScan();
+  scan->setScanCallbacks(&listener, /*wantDuplicates=*/true);
+  scan->setActiveScan(false);
+  scan->setInterval(RECEIVER_CYCLE_MS);
+  scan->setWindow(RECEIVER_ON_MS);
+  if (!scan->start(0, /*isContinue=*/false, /*restart=*/true)) {
+    advertising->stop();
+    return RadioResult::RadioFailed;
+  }
+
+  RadioResult result = RadioResult::TimeUp;
+  const uint32_t startedAt = millis();
+  uint32_t lastHeardAt = startedAt;
+  while (millis() - startedAt < maxBroadcastMs) {
+    if (listener.heard) {
+      listener.heard = false;
+      lastHeardAt = millis();
+    }
+    if (millis() - lastHeardAt >= phoneGoneMs) {
+      result = RadioResult::PhoneGone;
+      break;
+    }
+    if (powerButtonPressed()) {
+      result = RadioResult::ButtonPressed;
+      break;
+    }
+    if (!advertisingRunning() || !scanRunning()) {
+      result = RadioResult::RadioFailed;
+      break;
+    }
+    delay(CHECK_EVERY_MS);
+  }
+  scan->stop();
   advertising->stop();
   return result;
 }

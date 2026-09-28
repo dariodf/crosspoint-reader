@@ -3,8 +3,9 @@
 Find mode lets the owner of a lost X4 Pro find it with a phone. While asleep,
 the reader wakes every few minutes, listens for half a second for a secret
 code the phone broadcasts, and when it hears it, shows "Find mode activated.
-Press power to close." and broadcasts `CP-FIND` for a minute so a phone
-scanner can follow the signal strength to it. The code lives in
+Press power to close." and broadcasts `CP-FIND` so a phone scanner can follow
+the signal strength to it. The broadcast keeps going while the phone keeps
+calling (up to 10 minutes) and stops about 15 s after the phone stops. The code lives in
 `lib/FindMode/`, `src/FindModeRuntime.*` and
 `src/activities/settings/FindModeCodeActivity.*`.
 
@@ -94,7 +95,7 @@ below), `--skip-button` leaves out the last one.
 | `found_screens` | The found screen in English and Spanish, in all four orientations, saved as PNG |
 | `quiet_and_heard` | Two quiet wakes finish within 900 ms of boot; timer wakes 60 ± 4 s apart; the code is heard within 900 ms; the screen is drawn once |
 | `press_and_mute` | A press in found mode boots normally and mutes; a muted wake hears the code and stays silent; a quiet wake re-arms |
-| `timeout_and_address` | A broadcast ends by itself at 60 ± 1.5 s; every found session uses a new address |
+| `phone_gone_and_address` | The broadcast keeps going while the phone calls (past 70 s); it ends about 15 s after the phone stops (the suite allows 10 s more for macOS, which keeps advertising after `emit.py` stops); every found session uses a new address |
 | `radio_failure_keeps_mute` | A radio that fails to start leaves the mute in place |
 | `crashes_switch_off` | Each injected crash is counted; three switch the mode off; `FIND_RETRY` re-arms |
 | `hang_guard` | A hang inside the fast path is aborted within 7 s and counted as a crash |
@@ -116,7 +117,7 @@ during the crash scenario.
 | Quiet wake, listening done | 823-837 ms after boot (limit 900) |
 | Code heard | 382-506 ms after boot (limit 900) |
 | Timer wakes, 60 s interval | 60.9 s apart |
-| Broadcast timeout | 60,002-60,012 ms |
+| Broadcast length | while the phone calls, up to 10 minutes; ends ~15 s after the phone stops (Pixel, nRF Connect: graph continuous, CP-FIND gone ~15 s after the phone was switched off) |
 | Addresses | a new one for every found session (4 of 4, 2 of 2) |
 | Mute | heard and silent, then a quiet wake re-arms: listens `[0, 1, 0]` |
 | Radio failure | keeps the mute: listens `[4, 0, 1, 0]` |
