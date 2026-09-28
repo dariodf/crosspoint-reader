@@ -72,6 +72,7 @@ class CodeListener : public NimBLEScanCallbacks {
 
 CodeListener listener;
 uint32_t scanStartedAt = 0;
+uint32_t quietAtBroadcastEnd = 0;
 
 bool startRadio() { return NimBLEDevice::isInitialized() || NimBLEDevice::init(""); }
 
@@ -197,6 +198,7 @@ RadioResult broadcastFound(const Code& code, const uint32_t maxBroadcastMs, cons
     }
     delay(CHECK_EVERY_MS);
   }
+  quietAtBroadcastEnd = millis() - lastHeardAt;
   scan->stop();
   advertising->stop();
   return result;
@@ -205,6 +207,8 @@ RadioResult broadcastFound(const Code& code, const uint32_t maxBroadcastMs, cons
 uint32_t listenStartedAtMs() { return scanStartedAt; }
 
 int8_t heardRssi() { return listener.rssi; }
+
+uint32_t broadcastQuietMs() { return quietAtBroadcastEnd; }
 
 void stopRadio() {
   if (!NimBLEDevice::isInitialized()) return;

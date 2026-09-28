@@ -233,6 +233,7 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const Fi
             find_mode::broadcastFound(sleepState.code, BROADCAST_MS, PHONE_GONE_MS, powerButtonPressed);
         findTestRecord(find_mode::JournalEvent::BroadcastEnd, static_cast<uint8_t>(broadcastResult),
                        millis() - broadcastStartedAt);
+        findTestRecord(find_mode::JournalEvent::BroadcastQuiet, 0, find_mode::broadcastQuietMs());
         if (broadcastResult == find_mode::RadioResult::ButtonPressed) {
           // The owner has the reader. Their phone may still be advertising, so
           // the next wakes ignore the code until one wake no longer hears it.

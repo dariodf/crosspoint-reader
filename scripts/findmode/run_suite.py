@@ -34,6 +34,7 @@ PROBE_CODE = "c0de0001-f1d0-4b1e-9a5e-000000000001"
 
 # JournalEvent and RadioResult values, as in lib/FindMode/FindJournal.h and FindRadio.h.
 EV_BOOT, EV_BATTERY, EV_LISTEN_END, EV_FOUND_SCREEN, EV_BROADCAST_END, EV_HANDOVER, EV_SLEEP, EV_INJECT = range(1, 9)
+EV_BROADCAST_QUIET = 11
 HEARD, NOTHING_HEARD, TIME_UP, BUTTON_PRESSED, RADIO_FAILED, PHONE_GONE = range(6)
 ESP_RST_PANIC = 4
 ESP_RST_DEEPSLEEP = 8
@@ -45,10 +46,9 @@ INTERVAL_S = 60
 INTERVAL_TOLERANCE_S = 4
 # Found mode stops this long after the phone goes quiet (PHONE_GONE_MS).
 PHONE_GONE_S = 15
-PHONE_GONE_TOLERANCE_S = 4
-# macOS keeps advertising about 10 s after emit.py stops (measured 25.2 s twice
-# end to end, against ~15 s with a phone), so the suite allows for it.
-MAC_ADVERTISING_LINGER_S = 10
+# Measured on the device, from the phone's last packet to the broadcast's end,
+# so macOS advertising for ~10 s after emit.py stops leaves it unchanged.
+PHONE_GONE_TOLERANCE_MS = 200
 HANG_GUARD_MAX_S = 7
 
 
@@ -352,16 +352,17 @@ class Suite:
         stopped_at = time.time()
         self.stop_emitter()
         ended = self.device.wait_for(r"Radio stopped", PHONE_GONE_S + 30, since=stopped_at)
-        waited = time.time() - stopped_at
-        expected = PHONE_GONE_S + MAC_ADVERTISING_LINGER_S
-        self.check(f"broadcast ends {expected} +/- {PHONE_GONE_TOLERANCE_S} s after emit.py stops",
-                   ended is not None and abs(waited - expected) <= PHONE_GONE_TOLERANCE_S, f"{waited:.1f} s")
+        self.check("broadcast ends after emit.py stops", ended is not None, f"{time.time() - stopped_at:.1f} s")
         time.sleep(3)
         self.start_emitter()
         self.check("next session starts", self.wait_for_found_mode(INTERVAL_S + 20), "Code heard")
         journal = self.device.journal() or []
         gone = [e for e in journal if e[1] == EV_BROADCAST_END and e[2] == PHONE_GONE]
         self.check("broadcast ended as PhoneGone", bool(gone), f"{len(gone)} PhoneGone ends")
+        quiet = [e[3] for e in journal if e[1] == EV_BROADCAST_QUIET]
+        self.check(f"it ends {PHONE_GONE_S} s after the last packet heard",
+                   bool(quiet) and abs(quiet[-1] - PHONE_GONE_S * 1000) <= PHONE_GONE_TOLERANCE_MS,
+                   f"{quiet[-1]} ms" if quiet else "no BroadcastQuiet entry")
         # The watcher needs a moment to see the session that just started.
         addresses = self.found_addresses()
         for _ in range(20):

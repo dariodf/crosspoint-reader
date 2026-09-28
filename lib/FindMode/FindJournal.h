@@ -17,16 +17,17 @@
 namespace find_mode {
 
 enum class JournalEvent : uint8_t {
-  Boot = 1,      // detail: esp_reset_reason(); value: 1 when it was a timer wake
-  Battery,       // value: percent, or BATTERY_UNKNOWN
-  ListenEnd,     // detail: RadioResult; value: ms since boot
-  FoundScreen,   // value: ms since boot when drawn
-  BroadcastEnd,  // detail: RadioResult; value: broadcast length in ms
-  Handover,      // the owner pressed power: normal boot follows
-  Sleep,         // detail: 1 from the fast path, 0 from a normal sleep; value: timer seconds
-  Inject,        // detail: TestInjection consumed by this wake
-  ListenStart,   // value: ms since boot when the scan started (0 when it never did)
-  HeardRssi,     // detail: the phone's signal at the reader, as -dBm (60 = -60 dBm)
+  Boot = 1,        // detail: esp_reset_reason(); value: 1 when it was a timer wake
+  Battery,         // value: percent, or BATTERY_UNKNOWN
+  ListenEnd,       // detail: RadioResult; value: ms since boot
+  FoundScreen,     // value: ms since boot when drawn
+  BroadcastEnd,    // detail: RadioResult; value: broadcast length in ms
+  Handover,        // the owner pressed power: normal boot follows
+  Sleep,           // detail: 1 from the fast path, 0 from a normal sleep; value: timer seconds
+  Inject,          // detail: TestInjection consumed by this wake
+  ListenStart,     // value: ms since boot when the scan started (0 when it never did)
+  HeardRssi,       // detail: the phone's signal at the reader, as -dBm (60 = -60 dBm)
+  BroadcastQuiet,  // value: ms between the phone's last packet and the broadcast's end
 };
 
 struct JournalEntry {
