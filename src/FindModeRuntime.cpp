@@ -30,7 +30,9 @@ static constexpr uint32_t BROADCAST_MS = 60UL * 1000UL;
 // Time budgets for the fast-path guard below. Listening covers NimBLE start-up
 // (normally ~0.3 s), the listen itself and the teardown.
 static constexpr uint32_t LISTEN_BUDGET_MS = 5000;
-static constexpr uint32_t BROADCAST_BUDGET_MS = BROADCAST_MS + 5000;
+// The broadcast budget also covers drawing the found screen (display start-up
+// and one full refresh, a few seconds).
+static constexpr uint32_t BROADCAST_BUDGET_MS = BROADCAST_MS + 10000;
 
 // RTC_NOINIT keeps the state through deep sleep and through a crash reset, so
 // countFastPathCrash() can see a fast path that died. After power loss it holds
@@ -139,7 +141,7 @@ void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager) {
   }
 }
 
-void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager) {
+void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, const FindModeFoundScreen showFoundScreen) {
   // The timer and the power button can fire together; the chip then reports
   // the timer. The owner pressed power, so hand over at once.
   if (esp_sleep_get_wakeup_causes() & (1U << ESP_SLEEP_WAKEUP_EXT1)) {
@@ -189,6 +191,12 @@ void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager) {
       if (find_mode::decideAfterScan(sleepState, heardCode) == find_mode::AfterScanAction::BroadcastFound) {
         LOG_INF("FIND", "Code heard, broadcasting %s", find_mode::FOUND_NAME);
         armFastPathGuard(BROADCAST_BUDGET_MS);
+        // Tells whoever holds the reader what is going on. Drawn once: e-ink
+        // keeps it through every later sleep until the next sleep screen.
+        if (find_mode::needsFoundScreen(sleepState)) {
+          showFoundScreen(sleepState.language);
+          find_mode::markFoundScreenShown(sleepState);
+        }
         if (find_mode::broadcastFound(BROADCAST_MS, powerButtonPressed) == find_mode::RadioResult::ButtonPressed) {
           // The owner has the reader. Their phone may still be advertising, so
           // the next wakes ignore the code until one wake no longer hears it.
@@ -235,6 +243,9 @@ void findModePrepareSleep(HalPowerManager& powerManager) {
   }
   sleepState.intervalMinutes = settings.intervalMinutes;
   sleepState.minBatteryPercent = settings.minBatteryPercent;
+  sleepState.language = SETTINGS.language;
+  // This sleep draws the sleep screen over any found screen.
+  sleepState.foundScreenShown = 0;
   find_mode::updateChecksum(sleepState);
 
   LOG_INF("FIND", "Armed: every %u min, %lu wakes, %lu detections, %lu ms awake", sleepState.intervalMinutes,

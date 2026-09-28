@@ -307,7 +307,7 @@ void enterDeepSleep(bool fromTimeout = false) {
   powerManager.startDeepSleep(gpio);
 }
 
-void setupDisplayAndFonts(bool seamless = false) {
+void resolvePanelController() {
 #if !FREEINK_MCU_C3
   // C3 resolves its controller in HalGPIO::begin() before SPI claims the
   // display pins. X4 Pro skips that C3-only path, so probe here before
@@ -320,7 +320,30 @@ void setupDisplayAndFonts(bool seamless = false) {
     }
   }
 #endif
+}
 
+#if CROSSPOINT_FIND_MODE
+// Find mode's found screen, drawn from the timer-wake fast path: before the SD
+// card and settings.json, so it uses a built-in UI font and the language
+// find mode saved at the last sleep.
+void showFindModeScreen(const uint8_t language) {
+  I18N.setLanguage(static_cast<Language>(language));
+  resolvePanelController();
+  display.begin();
+  renderer.begin();
+  renderer.insertFont(UI_12_FONT_ID, ui12FontFamily);
+  renderer.clearScreen();
+  const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
+  const int middle = renderer.getScreenHeight() / 2;
+  renderer.drawCenteredText(UI_12_FONT_ID, middle - lineHeight, tr(STR_FIND_MODE_ON), true, EpdFontFamily::BOLD);
+  renderer.drawCenteredText(UI_12_FONT_ID, middle + lineHeight / 2, tr(STR_FIND_PRESS_POWER_TO_STOP));
+  renderer.displayBuffer(HalDisplay::FULL_REFRESH);
+  display.deepSleep();
+}
+#endif
+
+void setupDisplayAndFonts(bool seamless = false) {
+  resolvePanelController();
   display.begin(seamless);
   renderer.begin();
   activityManager.begin();
@@ -402,7 +425,7 @@ void setup() {
 #if CROSSPOINT_FIND_MODE
   findModeOnBoot(gpio, powerManager);
   if (findModeTimerWake) {
-    findModeRunTimerWake(gpio, powerManager);
+    findModeRunTimerWake(gpio, powerManager, showFindModeScreen);
     // Returned: the owner pressed power. Finish the input setup skipped above.
     gpio.begin();
   }

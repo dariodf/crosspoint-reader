@@ -57,6 +57,13 @@ void muteUntilCodeGone(FindState& state) {
   updateChecksum(state);
 }
 
+bool needsFoundScreen(const FindState& state) { return !state.foundScreenShown; }
+
+void markFoundScreenShown(FindState& state) {
+  state.foundScreenShown = 1;
+  updateChecksum(state);
+}
+
 void leaveFastPath(FindState& state, const uint32_t awakeMs, const bool heardCode) {
   state.inFastPath = 0;
   state.fastPathCrashes = 0;

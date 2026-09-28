@@ -229,6 +229,23 @@ TEST(FindStateScan, AMutedStateKeepsAFreshChecksum) {
   EXPECT_TRUE(valid);
 }
 
+TEST(FindStateFoundScreen, TheFirstFindShowsTheScreen) {
+  const FindState state = aValidState();
+
+  const bool needed = find_mode::needsFoundScreen(state);
+
+  EXPECT_TRUE(needed);
+}
+
+TEST(FindStateFoundScreen, ALaterFindKeepsTheScreenOnThePanel) {
+  FindState state = aValidState();
+  find_mode::markFoundScreenShown(state);
+
+  const bool needed = find_mode::needsFoundScreen(state);
+
+  EXPECT_TRUE(!needed && find_mode::isStateValid(state));
+}
+
 TEST(FindStateCounters, TwoFastPathsAddUp) {
   FindState state = aValidState();
   find_mode::enterFastPath(state);

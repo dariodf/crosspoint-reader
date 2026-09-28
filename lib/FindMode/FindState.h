@@ -34,7 +34,7 @@
 namespace find_mode {
 
 static constexpr uint32_t STATE_MAGIC = 0xF1ADC0DE;
-static constexpr uint8_t STATE_VERSION = 1;
+static constexpr uint8_t STATE_VERSION = 2;
 static constexpr uint8_t FAST_PATH_CRASHES_TO_SWITCH_OFF = 3;
 
 // Field order leaves no padding bytes, so the CRC covers every byte before
@@ -52,10 +52,12 @@ struct FindState {
   uint8_t inFastPath;       // raised on entry, cleared on a clean exit
   uint8_t switchedOffByCrashes;
   uint8_t mutedUntilCodeGone;  // set by the power button in found mode
-  uint8_t reserved;
+  uint8_t language;            // UI language for the found screen (settings.json is not read on a timer wake)
+  uint8_t foundScreenShown;    // the found screen is on the panel; cleared when the sleep screen replaces it
+  uint8_t reserved[3];
   uint32_t crc;
 };
-static_assert(sizeof(FindState) == 44, "FindState must have no padding");
+static_assert(sizeof(FindState) == 48, "FindState must have no padding");
 
 // Stamps magic, version and checksum. Call after every change to the struct.
 void updateChecksum(FindState& state);
@@ -91,6 +93,11 @@ enum class AfterScanAction {
 AfterScanAction decideAfterScan(FindState& state, bool heardCode);
 
 void muteUntilCodeGone(FindState& state);
+
+// The found screen is drawn once per search: the first found broadcast shows
+// it, and it stays on the e-ink panel until the next normal sleep screen.
+bool needsFoundScreen(const FindState& state);
+void markFoundScreenShown(FindState& state);
 void leaveFastPath(FindState& state, uint32_t awakeMs, bool heardCode);
 
 // Call early on every boot with whether the reset was a crash (panic or

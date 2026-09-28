@@ -25,11 +25,16 @@
 // fast path it sleeps until the power button instead of returning.
 void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager);
 
-// Timer wake: listens for the code and, when heard, broadcasts CP-FIND. Sleeps
-// again without returning, unless the owner pressed the power button (or the
-// mode cannot run); then it returns and setup() continues as a power-button
-// wake.
-void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager);
+// Draws the found screen ("Find mode on. Press power to stop.") in the given
+// UI language and puts the display back to sleep. Supplied by main.cpp, which
+// owns the display and fonts.
+using FindModeFoundScreen = void (*)(uint8_t language);
+
+// Timer wake: listens for the code and, when heard, shows the found screen
+// (once per search) and broadcasts CP-FIND. Sleeps again without returning,
+// unless the owner pressed the power button (or the mode cannot run); then it
+// returns and setup() continues as a power-button wake.
+void findModeRunTimerWake(HalGPIO& gpio, HalPowerManager& powerManager, FindModeFoundScreen showFoundScreen);
 
 // settings.json has been read. Until then findModePrepareSleep() keeps the
 // state as it is: a boot that failed to mount the SD card must not read the
