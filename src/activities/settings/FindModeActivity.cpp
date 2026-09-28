@@ -21,7 +21,7 @@ namespace fui = freeink::ui;
 
 namespace {
 // The how-to row is a short paragraph; the other rows fit on one or two lines.
-static constexpr int16_t MAX_ROW_LINES = 6;
+static constexpr int16_t MAX_ROW_LINES = 8;
 // The QR takes at most this share of the screen height, leaving the rows room.
 static constexpr int QR_HEIGHT_PERCENT = 35;
 static constexpr int QR_SIDE_MARGIN = 20;
@@ -38,7 +38,6 @@ void FindModeActivity::onEnter() {
   UiListActivity::onEnter();
   app.on(ACTION_SWITCH, &FindModeActivity::switchTrampoline, this);
   findModeEnsureCode();
-  for (int i = 0; i < ROW_COUNT; i++) rows[i].actionValue = static_cast<int16_t>(i);
   rows[ROW_CODE].label = SETTINGS.findModeCode;
   rows[ROW_HOW_TO].label = tr(STR_FIND_CODE_HINT);
   rows[ROW_TEST].label = tr(STR_FIND_TEST);
@@ -51,7 +50,11 @@ void FindModeActivity::onEnter() {
   offRow.label = tr(STR_FIND_OFF_HINT);
 }
 
-int FindModeActivity::listCount() const { return SETTINGS.findModeEnabled ? ROW_COUNT : 1; }
+int FindModeActivity::firstShownRow() const {
+  return findModeStatus() == FindModeStatus::SwitchedOff ? ROW_STATUS : ROW_CODE;
+}
+
+int FindModeActivity::listCount() const { return SETTINGS.findModeEnabled ? ROW_COUNT - firstShownRow() : 1; }
 
 void FindModeActivity::switchTrampoline(const fui::ActionEvent&, void* user) {
   auto* self = static_cast<FindModeActivity*>(user);
@@ -63,7 +66,7 @@ void FindModeActivity::switchTrampoline(const fui::ActionEvent&, void* user) {
 void FindModeActivity::activateIndex(const int index) {
   if (!SETTINGS.findModeEnabled) return;
   nav.selected = index;
-  switch (index) {
+  switch (index + firstShownRow()) {
     case ROW_CODE:
       showQr();
       return;
@@ -159,15 +162,7 @@ void FindModeActivity::buildScreen(UiScreen& screen) {
       std::min(renderer.getScreenWidth() - 2 * QR_SIDE_MARGIN, renderer.getScreenHeight() * QR_HEIGHT_PERCENT / 100);
   screen.spacer(static_cast<int16_t>(qrSide + metrics.verticalSpacing));
 
-  switch (findModeStatus()) {
-    case FindModeStatus::Listening:
-    case FindModeStatus::Off:
-      rows[ROW_STATUS].label = tr(STR_FIND_LISTENING);
-      break;
-    case FindModeStatus::SwitchedOff:
-      rows[ROW_STATUS].label = tr(STR_FIND_SWITCHED_OFF);
-      break;
-  }
+  rows[ROW_STATUS].label = tr(STR_FIND_SWITCHED_OFF);
   int testRssi = 0;
   switch (findModeLastTest(testRssi)) {
     case FindModeTestResult::Heard:
@@ -191,8 +186,11 @@ void FindModeActivity::buildScreen(UiScreen& screen) {
   snprintf(minBatteryValue, sizeof(minBatteryValue), tr(STR_FIND_PERCENT_FORMAT),
            static_cast<unsigned int>(SETTINGS.findModeMinBatteryPercent));
 
-  props.items = rows;
-  props.count = ROW_COUNT;
+  // Row actions carry the shown position, like button selection does.
+  const int first = firstShownRow();
+  for (int i = first; i < ROW_COUNT; i++) rows[i].actionValue = static_cast<int16_t>(i - first);
+  props.items = rows + first;
+  props.count = ROW_COUNT - first;
   syncListViewport(screen, props);
   screen.list(props);
 }
