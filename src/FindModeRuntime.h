@@ -25,7 +25,7 @@
 // fast path it sleeps until the power button instead of returning.
 void findModeOnBoot(HalGPIO& gpio, HalPowerManager& powerManager);
 
-// Draws the found screen ("Find mode on. Press power to stop.") in the given
+// Draws the found screen ("Find mode activated. Press power to close.") in the given
 // UI language and CrossPointSettings orientation, and puts the display back to
 // sleep. Supplied by main.cpp, which owns the display and fonts.
 using FindModeFoundScreen = void (*)(uint8_t language, uint8_t orientation);

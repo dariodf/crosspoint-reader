@@ -337,8 +337,8 @@ void showFindModeScreen(const uint8_t language, const uint8_t orientation) {
   renderer.clearScreen();
   const int lineHeight = renderer.getLineHeight(UI_12_FONT_ID);
   const int middle = renderer.getScreenHeight() / 2;
-  renderer.drawCenteredText(UI_12_FONT_ID, middle - lineHeight, tr(STR_FIND_MODE_ON), true, EpdFontFamily::BOLD);
-  renderer.drawCenteredText(UI_12_FONT_ID, middle + lineHeight / 2, tr(STR_FIND_PRESS_POWER_TO_STOP));
+  renderer.drawCenteredText(UI_12_FONT_ID, middle - lineHeight, tr(STR_FIND_MODE_ACTIVATED), true, EpdFontFamily::BOLD);
+  renderer.drawCenteredText(UI_12_FONT_ID, middle + lineHeight / 2, tr(STR_FIND_PRESS_POWER_TO_CLOSE));
   renderer.displayBuffer(HalDisplay::FULL_REFRESH);
   renderer.setOrientation(GfxRenderer::Orientation::Portrait);
   display.deepSleep();
