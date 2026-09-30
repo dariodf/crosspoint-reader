@@ -1,0 +1,147 @@
+name: Sync Upstream Release
+
+# Rebases release/find-mode onto upstream's latest release and publishes it as
+# <tag>-findmode.<N> once CI passes on the rebased tag, carrying N forward. The
+# firmware builds onto a draft release meanwhile, and the branch moves only
+# after both pass, so a failed run retries next day.
+#
+# CROSSPOINT_SYNC_TOKEN is a fine-grained token on this repo with Contents and
+# Workflows write access. The rebased history carries upstream's workflow
+# changes, and pushing those takes the Workflows permission.
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency: sync-upstream
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.rebase.outputs.version }}
+      old: ${{ steps.rebase.outputs.old }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: release/find-mode
+          fetch-depth: 0
+          token: ${{ secrets.CROSSPOINT_SYNC_TOKEN }}
+
+      - name: Find upstream's latest release
+        id: upstream
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$(gh release view --repo crosspoint-reader/crosspoint-reader --json tagName -q .tagName)"
+          git fetch --no-tags https://github.com/crosspoint-reader/crosspoint-reader.git \
+            "refs/tags/${tag}:refs/tags/${tag}"
+          if git merge-base --is-ancestor "$tag" HEAD; then
+            echo "release/find-mode already contains $tag"
+            # A run that moved the branch and stopped before publishing leaves its draft;
+            # hand-written drafts of the same version stay.
+            version="$(sed -n 's/^version = //p' platformio.ini | head -n1)"
+            leftover="$(gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate -q \
+              ".[] | select(.draft and .author.login == \"github-actions[bot]\" and .tag_name == \"${version}\") | .tag_name")"
+            if [ -n "$leftover" ]; then
+              gh release edit "$version" --draft=false --latest
+            fi
+            exit 0
+          fi
+          # Upstream can mark a backport on an older line as latest; the fork only moves forward.
+          base="$(sed -n 's/^version = //p' platformio.ini | head -n1)"
+          base="${base%%-findmode*}"
+          newest="$(printf '%s\n%s\n' "$base" "${tag#v}" | sort -V | tail -n1)"
+          if [ "$newest" = "$base" ]; then
+            echo "Upstream's latest ${tag} is not newer than the fork's base ${base}"
+          else
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Rebase onto the upstream release
+        id: rebase
+        if: steps.upstream.outputs.tag
+        shell: bash
+        env:
+          TAG: ${{ steps.upstream.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "old=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          scripts/rebase_onto_upstream.sh "$TAG" | tee rebase.log
+          grep '^version=' rebase.log >> "$GITHUB_OUTPUT"
+
+      - name: Draft the release
+        if: steps.upstream.outputs.tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.upstream.outputs.tag }}
+          VERSION: ${{ steps.rebase.outputs.version }}
+        run: |
+          if [ "$(gh release view "$VERSION" --json isDraft -q .isDraft 2>/dev/null)" = "false" ]; then
+            echo "${VERSION} is already published" >&2
+            exit 1
+          fi
+          # Drafts and tags left by failed runs are replaced, older upstream versions included.
+          # Only this workflow's drafts match, so hand-written drafts stay.
+          gh api "repos/${GITHUB_REPOSITORY}/releases" --paginate \
+            -q '.[] | select(.draft and .author.login == "github-actions[bot]") | .tag_name' |
+            while read -r stale; do gh release delete "$stale" --cleanup-tag --yes; done
+          git push --force origin "HEAD:refs/tags/${VERSION}"
+          {
+            echo "CrossPoint ${TAG} for the Xteink X4 Pro, plus BLE Find Mode."
+            echo
+            echo "## Upstream ${TAG}"
+            echo
+            # Upstream's Downloads section links its own firmware, so the notes end before it.
+            gh release view "$TAG" --repo crosspoint-reader/crosspoint-reader --json body -q .body |
+              tr -d '\r' |
+              awk '/^## Downloads/ { exit } /^(---)?$/ { held = held $0 "\n"; next } { printf "%s", held; held = ""; print }'
+          } > notes.md
+          gh release create "$VERSION" --draft --verify-tag --title "$VERSION" --notes-file notes.md
+
+  ci:
+    needs: prepare
+    if: needs.prepare.outputs.version
+    uses: ./.github/workflows/ci.yml
+    with:
+      ref: refs/tags/${{ needs.prepare.outputs.version }}
+
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.version
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.prepare.outputs.version }}
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+
+  publish:
+    needs: [prepare, ci, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/tags/${{ needs.prepare.outputs.version }}
+          fetch-depth: 0
+          token: ${{ secrets.CROSSPOINT_SYNC_TOKEN }}
+
+      - name: Move release/find-mode and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          OLD: ${{ needs.prepare.outputs.old }}
+        run: |
+          git push origin "${OLD}:refs/heads/backup/find-mode-before-${VERSION}"
+          git push --force-with-lease="release/find-mode:${OLD}" origin HEAD:refs/heads/release/find-mode
+          gh release edit "$VERSION" --draft=false --latest

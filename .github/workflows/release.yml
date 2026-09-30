@@ -1,7 +1,8 @@
 name: Compile Release
 
-# Build and attach firmware only after a release is published. The release tag
-# supplies both the source revision and the version in each asset name.
+# Build and attach firmware when a release is published, or to a draft release
+# when another workflow calls this one with its tag. The release tag supplies
+# both the source revision and the version in each asset name.
 #
 # Find mode builds only for the X4 Pro. Each release carries SHA256SUMS and a
 # build provenance attestation; check a download with
@@ -10,6 +11,11 @@ name: Compile Release
 on:
   release:
     types: [published]
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -27,12 +33,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ inputs.tag || github.event.release.tag_name }}
           submodules: recursive
 
       - name: Validate release version
         env:
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           configured_version="$(sed -n 's/^version = //p' platformio.ini | head -n1)"
@@ -84,7 +90,7 @@ jobs:
         id: asset
         env:
           PIO_ENV: ${{ github.event.release.prerelease && matrix.rc_env || matrix.release_env }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           asset="crosspoint-${version}-${{ matrix.device }}.bin"
@@ -123,7 +129,7 @@ jobs:
       - name: Attach firmware assets
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           test -f "dist/crosspoint-${version}-x4pro.bin"
